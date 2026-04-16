@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 原材料コレクション
+    match /ingredients/{ingredientId} {
+      allow read, write: if true; // 開発中は全て許可
+    }
+
+    // レシピコレクション
+    match /recipes/{recipeId} {
+      allow read, write: if true;
+    }
+
+    // 未登録商品コレクション
+    match /unregisteredProducts/{productName} {
+      allow read, write: if true;
+    }
+
+    // 売上データコレクション
+    match /sales/{saleId} {
+      allow read, write: if true;
+    }
+  }
+}
