@@ -170,23 +170,21 @@
                   ? 'border-primary bg-primary/10'
                   : ''} {day.salesData ? 'bg-blue-50 dark:bg-blue-950/20' : ''}"
               >
-                <div class="flex flex-col items-center justify-center h-full">
-                  <div class="text-xs sm:text-sm font-medium mb-0.5 sm:mb-1">{day.date}</div>
+                <div class="flex flex-col items-center justify-center h-full gap-0.5">
+                  <div class="text-xs sm:text-sm font-medium">{day.date}</div>
                   {#if day.salesData}
-                    <div class="space-y-0.5 sm:space-y-1 w-full">
-                      <div class="text-[9px] sm:text-[10px] text-muted-foreground truncate">
-                        ¥{day.salesData.totalSales.toLocaleString()}
-                      </div>
-                      {#if day.salesData.unregisteredCount > 0}
-                        <Badge variant="destructive" class="text-[7px] sm:text-[8px] px-0.5 sm:px-1 py-0">
-                          <span class="hidden sm:inline">未登録</span> {day.salesData.unregisteredCount}
-                        </Badge>
-                      {:else if day.salesData.inventoryProcessed}
-                        <Badge variant="default" class="text-[7px] sm:text-[8px] px-0.5 sm:px-1 py-0">
-                          <span class="hidden sm:inline">反映済み</span><span class="sm:hidden">✓</span>
-                        </Badge>
-                      {/if}
+                    <div class="text-[8px] sm:text-[10px] text-muted-foreground truncate w-full text-center px-0.5">
+                      ¥{day.salesData.totalSales.toLocaleString()}
                     </div>
+                    {#if day.salesData.unregisteredCount > 0}
+                      <div class="text-[9px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
+                        未{day.salesData.unregisteredCount}
+                      </div>
+                    {:else if day.salesData.inventoryProcessed}
+                      <div class="text-[10px] text-green-600 dark:text-green-400">
+                        ✓
+                      </div>
+                    {/if}
                   {/if}
                 </div>
               </button>

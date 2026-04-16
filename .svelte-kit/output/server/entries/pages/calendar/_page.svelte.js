@@ -229,32 +229,20 @@ function _page($$renderer, $$props) {
               let day = each_array_1[$$index_1];
               if (day.isCurrentMonth && day.date !== null) {
                 $$renderer4.push("<!--[0-->");
-                $$renderer4.push(`<button${attr_class(`aspect-square p-1 sm:p-2 rounded-lg border border-border hover:bg-muted/50 active:bg-muted/50 transition-colors touch-manipulation ${stringify(day.isToday ? "border-primary bg-primary/10" : "")} ${stringify(day.salesData ? "bg-blue-50 dark:bg-blue-950/20" : "")}`)}><div class="flex flex-col items-center justify-center h-full"><div class="text-xs sm:text-sm font-medium mb-0.5 sm:mb-1">${escape_html(day.date)}</div> `);
+                $$renderer4.push(`<button${attr_class(`aspect-square p-1 sm:p-2 rounded-lg border border-border hover:bg-muted/50 active:bg-muted/50 transition-colors touch-manipulation ${stringify(day.isToday ? "border-primary bg-primary/10" : "")} ${stringify(day.salesData ? "bg-blue-50 dark:bg-blue-950/20" : "")}`)}><div class="flex flex-col items-center justify-center h-full gap-0.5"><div class="text-xs sm:text-sm font-medium">${escape_html(day.date)}</div> `);
                 if (day.salesData) {
                   $$renderer4.push("<!--[0-->");
-                  $$renderer4.push(`<div class="space-y-0.5 sm:space-y-1 w-full"><div class="text-[9px] sm:text-[10px] text-muted-foreground truncate">¥${escape_html(day.salesData.totalSales.toLocaleString())}</div> `);
+                  $$renderer4.push(`<div class="text-[8px] sm:text-[10px] text-muted-foreground truncate w-full text-center px-0.5">¥${escape_html(day.salesData.totalSales.toLocaleString())}</div> `);
                   if (day.salesData.unregisteredCount > 0) {
                     $$renderer4.push("<!--[0-->");
-                    Badge($$renderer4, {
-                      variant: "destructive",
-                      class: "text-[7px] sm:text-[8px] px-0.5 sm:px-1 py-0",
-                      children: ($$renderer5) => {
-                        $$renderer5.push(`<span class="hidden sm:inline">未登録</span> ${escape_html(day.salesData.unregisteredCount)}`);
-                      }
-                    });
+                    $$renderer4.push(`<div class="text-[9px] sm:text-xs text-red-600 dark:text-red-400 font-medium">未${escape_html(day.salesData.unregisteredCount)}</div>`);
                   } else if (day.salesData.inventoryProcessed) {
                     $$renderer4.push("<!--[1-->");
-                    Badge($$renderer4, {
-                      variant: "default",
-                      class: "text-[7px] sm:text-[8px] px-0.5 sm:px-1 py-0",
-                      children: ($$renderer5) => {
-                        $$renderer5.push(`<span class="hidden sm:inline">反映済み</span><span class="sm:hidden">✓</span>`);
-                      }
-                    });
+                    $$renderer4.push(`<div class="text-[10px] text-green-600 dark:text-green-400">✓</div>`);
                   } else {
                     $$renderer4.push("<!--[-1-->");
                   }
-                  $$renderer4.push(`<!--]--></div>`);
+                  $$renderer4.push(`<!--]-->`);
                 } else {
                   $$renderer4.push("<!--[-1-->");
                 }
