@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Menu, X, Home, Database, ChefHat, FileWarning, Calendar, Upload } from 'lucide-svelte';
+  import { Menu, X, Home, Database, ChefHat, FileWarning, Calendar, Upload, BarChart3 } from 'lucide-svelte';
   import { page } from '$app/stores';
   import Button from './ui/Button.svelte';
 
@@ -26,6 +26,7 @@
     { href: '/recipes', label: '登録済み商品', icon: ChefHat },
     { href: '/unregistered', label: '未登録商品', icon: FileWarning },
     { href: '/calendar', label: '売上カレンダー', icon: Calendar },
+    { href: '/analytics', label: '売上分析', icon: BarChart3 },
   ];
 
   function isActive(href: string): boolean {
