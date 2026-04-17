@@ -8,6 +8,7 @@
     RefreshCw,
     AlertCircle,
     CheckCircle,
+    Cloud,
   } from 'lucide-svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import CardContent from '$lib/components/ui/CardContent.svelte';
@@ -17,12 +18,15 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import StatsCard from '$lib/components/StatsCard.svelte';
   import SalesTable from '$lib/components/SalesTable.svelte';
+  import WeatherIcon from '$lib/components/WeatherIcon.svelte';
+  import WeatherSelector from '$lib/components/WeatherSelector.svelte';
   import { dailySales } from '$lib/stores/dailySales.firestore';
   import { darkMode } from '$lib/stores/darkMode';
   import { processSalesData } from '$lib/utils/salesProcessor';
+  import { fetchWeatherForDate } from '$lib/utils/weatherService';
   import { page } from '$app/stores';
   import { browser } from '$app/environment';
-  import type { DailySales } from '$lib/types';
+  import type { DailySales, WeatherType } from '$lib/types';
   import { DollarSign, TrendingUp, Package } from 'lucide-svelte';
 
   let isDarkMode = $state(false);
@@ -30,6 +34,8 @@
   let dailyData = $state<DailySales | null>(null);
   let loading = $state(true);
   let reprocessing = $state(false);
+  let fetchingWeather = $state(false);
+  let showWeatherSelector = $state(false);
 
   darkMode.subscribe((value) => {
     isDarkMode = value;
@@ -111,6 +117,46 @@
       reprocessing = false;
     }
   }
+
+  async function handleFetchWeather() {
+    if (fetchingWeather) return;
+
+    try {
+      fetchingWeather = true;
+      console.log('[CalendarDate] 天候取得開始:', salesDate);
+
+      const weatherData = await fetchWeatherForDate(salesDate);
+
+      if (!weatherData) {
+        alert('天候データの取得に失敗しました。APIキーが設定されているか確認してください。');
+        return;
+      }
+
+      // 天候を保存
+      await dailySales.updateWeather(salesDate, weatherData.weather);
+
+      alert(`天候を取得しました: ${weatherData.description} (${weatherData.temp_c}°C)`);
+
+      // データをリロード
+      await loadData();
+    } catch (error) {
+      console.error('[CalendarDate] 天候取得エラー:', error);
+      alert(`天候取得中にエラーが発生しました: ${error}`);
+    } finally {
+      fetchingWeather = false;
+    }
+  }
+
+  async function handleWeatherSelect(weather: WeatherType) {
+    try {
+      await dailySales.updateWeather(salesDate, weather);
+      showWeatherSelector = false;
+      await loadData();
+    } catch (error) {
+      console.error('[CalendarDate] 天候更新エラー:', error);
+      alert(`天候更新中にエラーが発生しました: ${error}`);
+    }
+  }
 </script>
 
 <div class="min-h-screen bg-background">
@@ -161,6 +207,73 @@
         </CardContent>
       </Card>
     {:else}
+      <!-- 天候情報カード -->
+      <Card>
+        <CardHeader>
+          <CardTitle class="flex items-center justify-between">
+            <span class="flex items-center gap-2">
+              <Cloud class="h-5 w-5" />
+              天候情報
+            </span>
+            {#if dailyData.weather && dailyData.weather !== ''}
+              <div class="flex items-center gap-2">
+                <WeatherIcon weather={dailyData.weather} class="h-6 w-6" />
+                <span class="text-sm font-normal text-muted-foreground">
+                  {dailyData.weather === 'sunny' ? '晴れ' :
+                   dailyData.weather === 'cloudy' ? '曇り' :
+                   dailyData.weather === 'rainy' ? '雨' :
+                   dailyData.weather === 'snowy' ? '雪' : 'その他'}
+                </span>
+              </div>
+            {/if}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {#if !dailyData.weather || dailyData.weather === ''}
+            <p class="text-sm text-muted-foreground mb-4">
+              この日の天候情報がまだ設定されていません。
+            </p>
+          {/if}
+
+          <div class="flex flex-wrap gap-2 mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={handleFetchWeather}
+              disabled={fetchingWeather}
+              class="touch-manipulation"
+            >
+              {#if fetchingWeather}
+                <RefreshCw class="h-4 w-4 mr-2 animate-spin" />
+              {:else}
+                <Cloud class="h-4 w-4 mr-2" />
+              {/if}
+              天候を自動取得
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={() => showWeatherSelector = !showWeatherSelector}
+              class="touch-manipulation"
+            >
+              <AlertCircle class="h-4 w-4 mr-2" />
+              手動で設定
+            </Button>
+          </div>
+
+          {#if showWeatherSelector}
+            <div class="mt-4 p-4 border border-border rounded-lg bg-muted/30">
+              <p class="text-sm font-medium mb-3">天候を選択してください</p>
+              <WeatherSelector
+                weather={dailyData.weather || ''}
+                onSelect={handleWeatherSelect}
+              />
+            </div>
+          {/if}
+        </CardContent>
+      </Card>
+
       <!-- ステータスカード -->
       {#if dailyData.inventoryProcessed && dailyData.unregisteredCount === 0}
         <Card class="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/20">

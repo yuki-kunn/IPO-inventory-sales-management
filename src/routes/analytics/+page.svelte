@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { BarChart3, TrendingUp, Calendar as CalendarIcon, Moon, Sun } from 'lucide-svelte';
+  import { BarChart3, TrendingUp, Calendar as CalendarIcon, Moon, Sun, Cloud } from 'lucide-svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import CardContent from '$lib/components/ui/CardContent.svelte';
   import CardHeader from '$lib/components/ui/CardHeader.svelte';
@@ -8,9 +8,10 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import StatsCard from '$lib/components/StatsCard.svelte';
+  import WeatherIcon from '$lib/components/WeatherIcon.svelte';
   import { dailySales } from '$lib/stores/dailySales.firestore';
   import { darkMode } from '$lib/stores/darkMode';
-  import type { DailySales, SalesData } from '$lib/types';
+  import type { DailySales, SalesData, WeatherType } from '$lib/types';
   import { DollarSign, Package, ShoppingCart } from 'lucide-svelte';
 
   let isDarkMode = $state(false);
@@ -21,6 +22,9 @@
   let startDate = $state('');
   let endDate = $state('');
 
+  // 天候フィルタ
+  let weatherFilter = $state<WeatherType | 'all'>('all');
+
   // 集計結果
   let periodStats = $state({
     totalSales: 0,
@@ -29,6 +33,15 @@
     productCount: 0,
     avgDailySales: 0,
   });
+
+  // 天候別集計
+  let weatherStats = $state<Array<{
+    weather: WeatherType;
+    totalSales: number;
+    totalProfit: number;
+    dayCount: number;
+    avgDailySales: number;
+  }>>([]);
 
   // 商品別データ
   let productTrends = $state<Array<{
@@ -75,9 +88,14 @@
     if (!startDate || !endDate) return;
 
     // 期間内のデータをフィルタリング
-    const filteredData = allSalesData.filter((ds) => {
+    let filteredData = allSalesData.filter((ds) => {
       return ds.date >= startDate && ds.date <= endDate;
     });
+
+    // 天候フィルタを適用
+    if (weatherFilter !== 'all') {
+      filteredData = filteredData.filter((ds) => ds.weather === weatherFilter);
+    }
 
     // 統計計算
     let totalSales = 0;
@@ -127,14 +145,67 @@
         frequency: data.frequency,
       }))
       .sort((a, b) => b.totalSales - a.totalSales);
+
+    // 天候別統計を計算
+    calculateWeatherStats();
+  }
+
+  function calculateWeatherStats() {
+    if (!startDate || !endDate) return;
+
+    // 期間内の全データを取得（天候フィルタなし）
+    const periodData = allSalesData.filter((ds) => {
+      return ds.date >= startDate && ds.date <= endDate;
+    });
+
+    // 天候別にグループ化
+    const weatherMap = new Map<WeatherType, {
+      totalSales: number;
+      totalProfit: number;
+      dayCount: number;
+    }>();
+
+    periodData.forEach((daily) => {
+      const weather = daily.weather || '';
+      if (!weather) return; // 天候未設定はスキップ
+
+      const existing = weatherMap.get(weather as WeatherType) || {
+        totalSales: 0,
+        totalProfit: 0,
+        dayCount: 0,
+      };
+
+      weatherMap.set(weather as WeatherType, {
+        totalSales: existing.totalSales + daily.totalSales,
+        totalProfit: existing.totalProfit + daily.totalProfit,
+        dayCount: existing.dayCount + 1,
+      });
+    });
+
+    // 配列に変換してソート
+    weatherStats = Array.from(weatherMap.entries())
+      .map(([weather, data]) => ({
+        weather,
+        totalSales: data.totalSales,
+        totalProfit: data.totalProfit,
+        dayCount: data.dayCount,
+        avgDailySales: data.dayCount > 0 ? data.totalSales / data.dayCount : 0,
+      }))
+      .sort((a, b) => b.totalSales - a.totalSales);
   }
 
   function selectProduct(productName: string) {
     selectedProduct = productName;
 
     // 選択した商品の日別データを取得
-    const dailyData = allSalesData
-      .filter((ds) => ds.date >= startDate && ds.date <= endDate)
+    let filteredData = allSalesData.filter((ds) => ds.date >= startDate && ds.date <= endDate);
+
+    // 天候フィルタを適用
+    if (weatherFilter !== 'all') {
+      filteredData = filteredData.filter((ds) => ds.weather === weatherFilter);
+    }
+
+    const dailyData = filteredData
       .map((daily) => {
         const productSale = daily.sales.find((s) => s.productName === productName);
         return {
@@ -219,6 +290,80 @@
       </CardContent>
     </Card>
 
+    <!-- 天候フィルタ -->
+    <Card>
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2">
+          <Cloud class="h-5 w-5" />
+          天候フィルタ
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div class="flex flex-wrap gap-2">
+          <Button
+            variant={weatherFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => { weatherFilter = 'all'; calculatePeriodStats(); }}
+            class="touch-manipulation"
+          >
+            すべて
+          </Button>
+          <Button
+            variant={weatherFilter === 'sunny' ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => { weatherFilter = 'sunny'; calculatePeriodStats(); }}
+            class="touch-manipulation flex items-center gap-1"
+          >
+            <WeatherIcon weather="sunny" class="h-4 w-4" />
+            晴れ
+          </Button>
+          <Button
+            variant={weatherFilter === 'cloudy' ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => { weatherFilter = 'cloudy'; calculatePeriodStats(); }}
+            class="touch-manipulation flex items-center gap-1"
+          >
+            <WeatherIcon weather="cloudy" class="h-4 w-4" />
+            曇り
+          </Button>
+          <Button
+            variant={weatherFilter === 'rainy' ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => { weatherFilter = 'rainy'; calculatePeriodStats(); }}
+            class="touch-manipulation flex items-center gap-1"
+          >
+            <WeatherIcon weather="rainy" class="h-4 w-4" />
+            雨
+          </Button>
+          <Button
+            variant={weatherFilter === 'snowy' ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => { weatherFilter = 'snowy'; calculatePeriodStats(); }}
+            class="touch-manipulation flex items-center gap-1"
+          >
+            <WeatherIcon weather="snowy" class="h-4 w-4" />
+            雪
+          </Button>
+          <Button
+            variant={weatherFilter === 'other' ? 'default' : 'outline'}
+            size="sm"
+            onclick={() => { weatherFilter = 'other'; calculatePeriodStats(); }}
+            class="touch-manipulation"
+          >
+            その他
+          </Button>
+        </div>
+        {#if weatherFilter !== 'all'}
+          <p class="text-sm text-muted-foreground mt-3">
+            現在、{weatherFilter === 'sunny' ? '晴れ' :
+                    weatherFilter === 'cloudy' ? '曇り' :
+                    weatherFilter === 'rainy' ? '雨' :
+                    weatherFilter === 'snowy' ? '雪' : 'その他'}の日のみを表示しています
+          </p>
+        {/if}
+      </CardContent>
+    </Card>
+
     <!-- 期間統計 -->
     <div class="grid gap-3 grid-cols-2 md:grid-cols-2 lg:grid-cols-5">
       <StatsCard
@@ -257,6 +402,65 @@
         iconColor="text-teal-600 dark:text-teal-400"
       />
     </div>
+
+    <!-- 天候別統計 -->
+    {#if weatherStats.length > 0 && weatherFilter === 'all'}
+      <Card>
+        <CardHeader>
+          <CardTitle class="flex items-center gap-2">
+            <Cloud class="h-5 w-5" />
+            天候別売上統計
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-border">
+                  <th class="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase">天候</th>
+                  <th class="text-right px-4 py-3 font-medium text-xs text-muted-foreground uppercase">日数</th>
+                  <th class="text-right px-4 py-3 font-medium text-xs text-muted-foreground uppercase">総売上</th>
+                  <th class="text-right px-4 py-3 font-medium text-xs text-muted-foreground uppercase">総粗利</th>
+                  <th class="text-right px-4 py-3 font-medium text-xs text-muted-foreground uppercase">1日平均売上</th>
+                  <th class="text-center px-4 py-3 font-medium text-xs text-muted-foreground uppercase">フィルタ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each weatherStats as stat, index}
+                  <tr class="border-b border-border hover:bg-muted/50 transition-colors">
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-2">
+                        <WeatherIcon weather={stat.weather} class="h-5 w-5" />
+                        <span class="font-medium">
+                          {stat.weather === 'sunny' ? '晴れ' :
+                           stat.weather === 'cloudy' ? '曇り' :
+                           stat.weather === 'rainy' ? '雨' :
+                           stat.weather === 'snowy' ? '雪' : 'その他'}
+                        </span>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3 text-right text-sm">{stat.dayCount}日</td>
+                    <td class="px-4 py-3 text-right font-medium">{formatCurrency(stat.totalSales)}</td>
+                    <td class="px-4 py-3 text-right font-medium">{formatCurrency(stat.totalProfit)}</td>
+                    <td class="px-4 py-3 text-right text-sm">{formatCurrency(stat.avgDailySales)}</td>
+                    <td class="px-4 py-3 text-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => { weatherFilter = stat.weather; calculatePeriodStats(); }}
+                        class="touch-manipulation text-xs"
+                      >
+                        絞り込む
+                      </Button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    {/if}
 
     <!-- 商品別ランキング -->
     <Card>
@@ -313,6 +517,7 @@
 
     <!-- 商品別トレンド -->
     {#if selectedProduct && productDailyData.length > 0}
+      {@const maxQuantity = Math.max(...productDailyData.map(d => d.quantity))}
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between">
@@ -346,7 +551,6 @@
             <div class="space-y-2">
               <h4 class="text-sm font-medium">日別販売推移</h4>
               {#each productDailyData as data}
-                {@const maxQuantity = Math.max(...productDailyData.map(d => d.quantity))}
                 <div class="flex items-center gap-3">
                   <div class="text-xs text-muted-foreground w-16">{formatDate(data.date)}</div>
                   <div class="flex-1">

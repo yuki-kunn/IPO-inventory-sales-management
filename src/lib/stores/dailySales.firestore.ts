@@ -229,6 +229,7 @@ function createDailySalesFirestoreStore() {
             inventoryProcessed: data.inventoryProcessed || false,
             unregisteredCount: data.unregisteredCount || 0,
             processedProducts: data.processedProducts || [],
+            weather: data.weather || '',
             createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           };
