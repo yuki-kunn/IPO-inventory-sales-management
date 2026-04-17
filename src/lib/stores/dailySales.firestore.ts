@@ -47,6 +47,7 @@ function createDailySalesFirestoreStore() {
           inventoryProcessed: data.inventoryProcessed || false,
           unregisteredCount: data.unregisteredCount || 0,
           processedProducts: data.processedProducts || [],
+          weather: data.weather || '',
           createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
           updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
         });
@@ -112,6 +113,7 @@ function createDailySalesFirestoreStore() {
             inventoryProcessed: existingDoc.data().inventoryProcessed || false,
             unregisteredCount,
             processedProducts: existingDoc.data().processedProducts || [],
+            weather: existingDoc.data().weather || '',
             createdAt: existingDoc.data().createdAt || Timestamp.now(),
             updatedAt: Timestamp.now(),
           });
@@ -127,6 +129,7 @@ function createDailySalesFirestoreStore() {
             sales: salesData,
             inventoryProcessed: false,
             unregisteredCount,
+            weather: '',
             processedProducts: [],
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
@@ -157,6 +160,25 @@ function createDailySalesFirestoreStore() {
         console.log('[DailySales] マーク成功:', date);
       } catch (error) {
         console.error('[DailySales] マーク失敗:', error);
+        throw error;
+      }
+    },
+    updateWeather: async (date: string, weather: string) => {
+      if (!browser || !db) {
+        console.log('[DailySales] ブラウザまたはDBが利用不可 - updateWeather');
+        return;
+      }
+
+      try {
+        console.log('[DailySales] 天候を更新:', date, '天候:', weather);
+        const dailySalesRef = doc(db, COLLECTION_NAME, date);
+        await updateDoc(dailySalesRef, {
+          weather,
+          updatedAt: Timestamp.now(),
+        });
+        console.log('[DailySales] 天候更新成功:', date);
+      } catch (error) {
+        console.error('[DailySales] 天候更新失敗:', error);
         throw error;
       }
     },

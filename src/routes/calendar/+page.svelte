@@ -6,6 +6,7 @@
   import CardTitle from '$lib/components/ui/CardTitle.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
+  import WeatherIcon from '$lib/components/WeatherIcon.svelte';
   import { dailySales } from '$lib/stores/dailySales.firestore';
   import { darkMode } from '$lib/stores/darkMode';
   import type { DailySales } from '$lib/types';
@@ -171,7 +172,12 @@
                   : ''} {day.salesData ? 'bg-blue-50 dark:bg-blue-950/20' : ''}"
               >
                 <div class="flex flex-col items-center justify-center h-full gap-0.5">
-                  <div class="text-xs sm:text-sm font-medium">{day.date}</div>
+                  <div class="flex items-center gap-1">
+                    <div class="text-xs sm:text-sm font-medium">{day.date}</div>
+                    {#if day.salesData?.weather}
+                      <WeatherIcon weather={day.salesData.weather} class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    {/if}
+                  </div>
                   {#if day.salesData}
                     <div class="text-[8px] sm:text-[10px] text-muted-foreground truncate w-full text-center px-0.5">
                       ¥{day.salesData.totalSales.toLocaleString()}

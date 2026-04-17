@@ -77,6 +77,9 @@ export interface SalesData {
   importedAt: string;
 }
 
+// 天候タイプ
+export type WeatherType = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'other' | '';
+
 // 日別売上集計
 export interface DailySales {
   id: string; // YYYY-MM-DD形式の日付をIDとして使用
@@ -89,6 +92,7 @@ export interface DailySales {
   inventoryProcessed: boolean; // 原材料在庫減算が処理済みかどうか
   unregisteredCount: number; // 未登録商品数
   processedProducts: string[]; // 在庫減算済みの商品名リスト
+  weather?: WeatherType; // 天候情報
   createdAt: string;
   updatedAt: string;
 }
