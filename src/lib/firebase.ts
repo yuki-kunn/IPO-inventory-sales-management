@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { connectFirestoreEmulator,getFirestore } from 'firebase/firestore';
 import { env } from '$env/dynamic/public';
 
 // Firebase設定（環境変数から読み込み）
