@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Package, Moon, Sun, Plus, Edit, Trash2 } from 'lucide-svelte';
+	import { Package, Moon, Sun, Plus, Edit, Trash2, Download } from 'lucide-svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardContent from '$lib/components/ui/CardContent.svelte';
 	import CardHeader from '$lib/components/ui/CardHeader.svelte';
@@ -17,6 +17,7 @@
 	let isDarkMode = $state(false);
 	let editingIngredient = $state<Ingredient | null>(null);
 	let showAddModal = $state(false);
+	let isImporting = $state(false);
 
 	ingredients.subscribe((value) => {
 		currentIngredients = value;
@@ -47,6 +48,53 @@
 	function closeAddModal() {
 		showAddModal = false;
 	}
+
+	async function handleImportFromNotion() {
+		if (!confirm('Notionから原材料データを取得しますか？\n既存のデータは上書きされません。')) {
+			return;
+		}
+
+		isImporting = true;
+		try {
+			const response = await fetch('/api/notion/ingredients-import');
+			const data = await response.json();
+
+			if (data.error) {
+				alert(`エラー: ${data.error}\n${data.details || ''}`);
+				return;
+			}
+
+			if (data.ingredients && Array.isArray(data.ingredients)) {
+				let importedCount = 0;
+				let skippedCount = 0;
+
+				for (const notionIngredient of data.ingredients) {
+					// 既存の原材料と名前で照合
+					const exists = currentIngredients.some((ing) => ing.name === notionIngredient.name);
+
+					if (exists) {
+						skippedCount++;
+						continue;
+					}
+
+					// Firestoreに追加
+					await ingredients.add(notionIngredient);
+					importedCount++;
+				}
+
+				alert(
+					`Notionからインポート完了\n追加: ${importedCount}件\nスキップ（既存）: ${skippedCount}件`
+				);
+			} else {
+				alert('データの形式が正しくありません');
+			}
+		} catch (error) {
+			console.error('[Notion Import] エラー:', error);
+			alert(`インポートに失敗しました: ${error}`);
+		} finally {
+			isImporting = false;
+		}
+	}
 </script>
 
 <div class="bg-background min-h-screen">
@@ -66,6 +114,15 @@
 					{:else}
 						<Moon class="h-5 w-5" />
 					{/if}
+				</Button>
+				<Button
+					variant="outline"
+					onclick={handleImportFromNotion}
+					disabled={isImporting}
+					class="touch-manipulation"
+				>
+					<Download class="h-4 w-4" />
+					<span class="hidden sm:inline">{isImporting ? '取得中...' : 'Notionから取得'}</span>
 				</Button>
 				<Button onclick={() => (showAddModal = true)} class="touch-manipulation">
 					<Plus class="h-4 w-4" />

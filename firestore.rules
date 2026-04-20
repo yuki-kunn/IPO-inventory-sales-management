@@ -20,5 +20,10 @@ service cloud.firestore {
     match /sales/{saleId} {
       allow read, write: if true;
     }
+
+    // 日別売上データコレクション
+    match /dailySales/{dailySaleId} {
+      allow read, write: if true;
+    }
   }
 }
