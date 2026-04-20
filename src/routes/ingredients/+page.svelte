@@ -50,49 +50,22 @@
 	}
 
 	async function handleImportFromNotion() {
-		if (!confirm('Notionから原材料データを取得しますか？\n既存のデータは上書きされません。')) {
-			return;
-		}
+		console.log('[Notion Import] ボタンがクリックされました！');
 
 		isImporting = true;
+		console.log('[Notion Import] Notionから最新データを取得中...');
+
 		try {
-			const response = await fetch('/api/notion/ingredients-import');
-			const data = await response.json();
-
-			if (data.error) {
-				alert(`エラー: ${data.error}\n${data.details || ''}`);
-				return;
-			}
-
-			if (data.ingredients && Array.isArray(data.ingredients)) {
-				let importedCount = 0;
-				let skippedCount = 0;
-
-				for (const notionIngredient of data.ingredients) {
-					// 既存の原材料と名前で照合
-					const exists = currentIngredients.some((ing) => ing.name === notionIngredient.name);
-
-					if (exists) {
-						skippedCount++;
-						continue;
-					}
-
-					// Firestoreに追加
-					await ingredients.add(notionIngredient);
-					importedCount++;
-				}
-
-				alert(
-					`Notionからインポート完了\n追加: ${importedCount}件\nスキップ（既存）: ${skippedCount}件`
-				);
-			} else {
-				alert('データの形式が正しくありません');
-			}
+			// 既存のストアのrefreshメソッドを呼び出して最新データを取得
+			await ingredients.refresh();
+			console.log('[Notion Import] 取得完了');
+			alert('Notionから最新データを取得しました');
 		} catch (error) {
-			console.error('[Notion Import] エラー:', error);
-			alert(`インポートに失敗しました: ${error}`);
+			console.error('[Notion Import] 例外エラー:', error);
+			alert(`データ取得に失敗しました: ${error}`);
 		} finally {
 			isImporting = false;
+			console.log('[Notion Import] 処理終了');
 		}
 	}
 </script>
@@ -122,7 +95,7 @@
 					class="touch-manipulation"
 				>
 					<Download class="h-4 w-4" />
-					<span class="hidden sm:inline">{isImporting ? '取得中...' : 'Notionから取得'}</span>
+					<span>{isImporting ? '取得中...' : 'Notionから取得'}</span>
 				</Button>
 				<Button onclick={() => (showAddModal = true)} class="touch-manipulation">
 					<Plus class="h-4 w-4" />
