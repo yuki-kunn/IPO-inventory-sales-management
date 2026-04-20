@@ -53,8 +53,8 @@ VITE_FIREBASE_APP_ID=1:123456789012:web:abcdef1234567890
 
 \`\`\`
 [Firebase] Config: {
-  projectId: "your-project-id",  ← ダブルクォートやカンマがないこと
-  apiKeySet: true,
-  authDomainSet: true
+projectId: "your-project-id", ← ダブルクォートやカンマがないこと
+apiKeySet: true,
+authDomainSet: true
 }
 \`\`\`

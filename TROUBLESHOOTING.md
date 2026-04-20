@@ -29,6 +29,7 @@ cat .env | sed 's/=.*/=***/'
 ```
 
 必要な環境変数:
+
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
 - `VITE_FIREBASE_PROJECT_ID`
@@ -41,8 +42,8 @@ cat .env | sed 's/=.*/=***/'
 ```javascript
 // ブラウザのコンソールで実行
 console.log('Firebase Config:', {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? '設定済み' : '未設定',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+	apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? '設定済み' : '未設定',
+	projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID
 });
 ```
 
@@ -80,6 +81,7 @@ service cloud.firestore {
 **原因**: Firebase API Keyが正しくない
 
 **解決方法**:
+
 1. Firebase Console → プロジェクト設定 → 全般
 2. 「マイアプリ」セクションでウェブアプリの設定を確認
 3. `.env`ファイルのAPIキーを更新
@@ -90,11 +92,14 @@ service cloud.firestore {
 **原因**: Firestoreのセキュリティルールが厳しすぎる
 
 **解決方法**:
+
 1. Firebase Console → Firestore Database → ルール
 2. 開発中は全てのアクセスを許可:
+
 ```
 allow read, write: if true;
 ```
+
 3. 「公開」をクリック
 
 ### データが同期されない
@@ -102,6 +107,7 @@ allow read, write: if true;
 **原因**: リスナーが初期化されていない
 
 **解決方法**:
+
 1. ページを完全にリロード（Ctrl+Shift+R）
 2. ブラウザのキャッシュをクリア
 3. コンソールログで `[UnregisteredProducts] リスナーを初期化中...` が表示されるか確認
@@ -109,11 +115,13 @@ allow read, write: if true;
 ### CSVアップロード後、何も起こらない
 
 **原因**:
+
 - CSVファイルの形式が間違っている
 - 全ての商品がカテゴリ（「男性」「女性」）として無視されている
 - 全ての商品にレシピが登録されている
 
 **解決方法**:
+
 1. コンソールログを確認
 2. CSVファイルの内容を確認:
    - 商品名が正しく読み込まれているか
@@ -126,15 +134,16 @@ allow read, write: if true;
 
 1. `src/lib/firebase.ts` を開く
 2. Firebaseの初期化後に以下を追加:
+
 ```typescript
 import { enableIndexedDbPersistence } from 'firebase/firestore';
 
 // デバッグログを有効化
 if (browser) {
-  window.FIRESTORE_DEBUG = true;
-  enableIndexedDbPersistence(db).catch((err) => {
-    console.error('Persistence error:', err);
-  });
+	window.FIRESTORE_DEBUG = true;
+	enableIndexedDbPersistence(db).catch((err) => {
+		console.error('Persistence error:', err);
+	});
 }
 ```
 
