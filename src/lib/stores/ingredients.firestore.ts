@@ -1,229 +1,170 @@
 import { writable, derived } from 'svelte/store';
 import type { Ingredient, IngredientStats } from '$lib/types';
-import { db } from '$lib/firebase';
-import {
-  collection,
-  doc,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  onSnapshot,
-  Timestamp,
-} from 'firebase/firestore';
 import { browser } from '$app/environment';
 
-const COLLECTION_NAME = 'ingredients';
+// Notion経由で原材料を管理するストア
+function createIngredientsNotionStore() {
+	const { subscribe, set, update } = writable<Ingredient[]>([]);
 
-// Firestoreのストア
-function createIngredientsFirestoreStore() {
-  const { subscribe, set, update } = writable<Ingredient[]>([]);
+	let refreshInterval: ReturnType<typeof setInterval> | null = null;
 
-  let unsubscribe: (() => void) | null = null;
+	// Notionから最新データを取得
+	async function fetchIngredients() {
+		if (!browser) return;
 
-  // Firestoreのリアルタイムリスナーをセットアップ
-  function initListener() {
-    if (!browser || !db) {
-      console.log('[Ingredients] ブラウザまたはDBが利用不可');
-      return;
-    }
+		try {
+			console.log('[Ingredients] Notionからデータ取得中...');
+			const response = await fetch('/api/notion/ingredients');
 
-    console.log('[Ingredients] リスナーを初期化中...');
-    const collectionRef = collection(db, COLLECTION_NAME);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch ingredients: ${response.statusText}`);
+			}
 
-    unsubscribe = onSnapshot(collectionRef, (snapshot) => {
-      const ingredients: Ingredient[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        ingredients.push({
-          id: doc.id,
-          name: data.name,
-          unit: data.unit,
-          stockQuantity: data.stockQuantity,
-          minStockLevel: data.minStockLevel,
-          supplier: data.supplier,
-          unitPrice: data.unitPrice,
-          description: data.description,
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        });
-      });
+			const data = await response.json();
 
-      // クライアント側でソート（作成日時の降順）
-      ingredients.sort((a, b) => {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
+			if (data.ingredients) {
+				console.log('[Ingredients] データ更新:', data.ingredients.length, '件');
+				data.ingredients.forEach((i: Ingredient) => {
+					console.log('[Ingredients]  -', i.name, '在庫:', i.stockQuantity, i.unit);
+				});
+				set(data.ingredients);
+			}
+		} catch (error) {
+			console.error('[Ingredients] データ取得エラー:', error);
+		}
+	}
 
-      console.log('[Ingredients] データ更新:', ingredients.length, '件');
-      ingredients.forEach((i) => {
-        console.log('[Ingredients]  -', i.name, '在庫:', i.stockQuantity, i.unit);
-      });
+	// 定期的にデータを取得（30秒ごと）
+	function initAutoRefresh() {
+		if (!browser) return;
 
-      set(ingredients);
-    });
-  }
+		// 初回読み込み
+		fetchIngredients();
 
-  // ブラウザ環境でリスナーを初期化
-  if (browser && db) {
-    initListener();
-  }
+		// 30秒ごとに更新
+		refreshInterval = setInterval(() => {
+			fetchIngredients();
+		}, 30000);
+	}
 
-  return {
-    subscribe,
-    add: async (ingredient: Omit<Ingredient, 'id'>) => {
-      if (!browser || !db) {
-        console.log('[Ingredients] ブラウザまたはDBが利用不可 - add');
-        return;
-      }
+	// ブラウザ環境で自動更新を開始
+	if (browser) {
+		initAutoRefresh();
+	}
 
-      try {
-        console.log('[Ingredients] 原材料追加:', ingredient.name);
+	return {
+		subscribe,
+		refresh: fetchIngredients,
+		add: async (ingredient: Omit<Ingredient, 'id'>) => {
+			// 注意: Notionへの追加は現在未実装（手動でNotionに追加する想定）
+			console.warn('[Ingredients] Notionへの追加機能は未実装です。Notionから直接追加してください。');
+			// 追加後に最新データを取得
+			await fetchIngredients();
+		},
+		update: async (id: string, updatedIngredient: Partial<Ingredient>) => {
+			if (!browser) return;
 
-        // undefinedのフィールドを除外
-        const data: any = {
-          name: ingredient.name,
-          unit: ingredient.unit,
-          stockQuantity: ingredient.stockQuantity,
-          minStockLevel: ingredient.minStockLevel,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-        };
+			// 在庫数のみ更新可能
+			if (updatedIngredient.stockQuantity !== undefined) {
+				try {
+					const response = await fetch('/api/notion/ingredients', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							updates: [{ id, newStock: updatedIngredient.stockQuantity }]
+						})
+					});
 
-        if (ingredient.supplier !== undefined) {
-          data.supplier = ingredient.supplier;
-        }
-        if (ingredient.unitPrice !== undefined) {
-          data.unitPrice = ingredient.unitPrice;
-        }
-        if (ingredient.description !== undefined) {
-          data.description = ingredient.description;
-        }
+					if (!response.ok) {
+						throw new Error('Failed to update ingredient');
+					}
 
-        await addDoc(collection(db, COLLECTION_NAME), data);
-        console.log('[Ingredients] 原材料追加成功:', ingredient.name);
-      } catch (error) {
-        console.error('[Ingredients] 原材料追加失敗:', error);
-        throw error;
-      }
-    },
-    update: async (id: string, updatedIngredient: Partial<Ingredient>) => {
-      if (!browser || !db) {
-        console.log('[Ingredients] ブラウザまたはDBが利用不可 - update');
-        return;
-      }
+					// 更新後に最新データを取得
+					await fetchIngredients();
+				} catch (error) {
+					console.error('[Ingredients] 更新エラー:', error);
+					throw error;
+				}
+			} else {
+				console.warn('[Ingredients] 在庫数以外の更新はNotionから直接行ってください');
+			}
+		},
+		remove: async (id: string) => {
+			console.warn('[Ingredients] 削除はNotionから直接行ってください');
+		},
+		reduceStock: async (ingredientId: string, quantity: number) => {
+			if (!browser) return;
 
-      try {
-        console.log('[Ingredients] 原材料更新:', id, updatedIngredient);
+			try {
+				// 現在のストアから在庫を取得
+				let currentIngredients: Ingredient[] = [];
+				const unsubscribe = subscribe((value) => {
+					currentIngredients = value;
+				});
+				unsubscribe();
 
-        // undefinedのフィールドを除外してFirestoreに送信
-        const data: any = {
-          updatedAt: Timestamp.now(),
-        };
+				const ingredient = currentIngredients.find((i) => i.id === ingredientId);
+				if (!ingredient) {
+					throw new Error('Ingredient not found');
+				}
 
-        // 必須フィールド
-        if (updatedIngredient.name !== undefined) {
-          data.name = updatedIngredient.name;
-        }
-        if (updatedIngredient.unit !== undefined) {
-          data.unit = updatedIngredient.unit;
-        }
-        if (updatedIngredient.stockQuantity !== undefined) {
-          data.stockQuantity = updatedIngredient.stockQuantity;
-        }
-        if (updatedIngredient.minStockLevel !== undefined) {
-          data.minStockLevel = updatedIngredient.minStockLevel;
-        }
+				const currentStock = ingredient.stockQuantity || 0;
+				const newStock = Math.max(0, currentStock - quantity);
 
-        // オプションフィールド
-        if (updatedIngredient.supplier !== undefined) {
-          data.supplier = updatedIngredient.supplier;
-        }
-        if (updatedIngredient.unitPrice !== undefined) {
-          data.unitPrice = updatedIngredient.unitPrice;
-        }
-        if (updatedIngredient.description !== undefined) {
-          data.description = updatedIngredient.description;
-        }
+				// Notionに更新
+				const response = await fetch('/api/notion/ingredients', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						updates: [{ id: ingredientId, newStock }]
+					})
+				});
 
-        const ingredientRef = doc(db, COLLECTION_NAME, id);
-        await updateDoc(ingredientRef, data);
-        console.log('[Ingredients] 原材料更新成功:', id);
-      } catch (error) {
-        console.error('[Ingredients] 原材料更新失敗:', error);
-        throw error;
-      }
-    },
-    remove: async (id: string) => {
-      if (!browser || !db) return;
+				if (!response.ok) {
+					throw new Error('Failed to reduce stock');
+				}
 
-      try {
-        await deleteDoc(doc(db, COLLECTION_NAME, id));
-      } catch (error) {
-        console.error('Failed to delete ingredient:', error);
-        throw error;
-      }
-    },
-    reduceStock: async (ingredientId: string, quantity: number) => {
-      if (!browser || !db) return;
+				console.log(
+					'[Ingredients] 在庫減算:',
+					ingredient.name,
+					currentStock,
+					'→',
+					newStock
+				);
 
-      try {
-        // まず現在の在庫を取得
-        const ingredients = await getDocs(collection(db, COLLECTION_NAME));
-        const ingredient = ingredients.docs.find((doc) => doc.id === ingredientId);
-
-        if (ingredient) {
-          const currentStock = ingredient.data().stockQuantity || 0;
-          const newStock = Math.max(0, currentStock - quantity);
-
-          const ingredientRef = doc(db, COLLECTION_NAME, ingredientId);
-          await updateDoc(ingredientRef, {
-            stockQuantity: newStock,
-            updatedAt: Timestamp.now(),
-          });
-        }
-      } catch (error) {
-        console.error('Failed to reduce stock:', error);
-        throw error;
-      }
-    },
-    reset: async () => {
-      if (!browser || !db) return;
-
-      try {
-        const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-        const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref));
-        await Promise.all(deletePromises);
-      } catch (error) {
-        console.error('Failed to reset ingredients:', error);
-        throw error;
-      }
-    },
-    destroy: () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    },
-  };
+				// 更新後に最新データを取得
+				await fetchIngredients();
+			} catch (error) {
+				console.error('[Ingredients] 在庫減算エラー:', error);
+				throw error;
+			}
+		},
+		reset: async () => {
+			console.warn('[Ingredients] リセットはNotionから直接行ってください');
+		},
+		destroy: () => {
+			if (refreshInterval) {
+				clearInterval(refreshInterval);
+			}
+		}
+	};
 }
 
-export const ingredients = createIngredientsFirestoreStore();
+export const ingredients = createIngredientsNotionStore();
 
 // 統計情報の派生ストア
 export const ingredientStats = derived(ingredients, ($ingredients): IngredientStats => {
-  const totalIngredients = $ingredients.length;
-  const lowStockIngredients = $ingredients.filter(
-    (i) => i.stockQuantity > 0 && i.stockQuantity <= i.minStockLevel
-  ).length;
-  const outOfStockIngredients = $ingredients.filter((i) => i.stockQuantity === 0).length;
-  const totalValue = $ingredients.reduce(
-    (sum, i) => sum + (i.unitPrice || 0) * i.stockQuantity,
-    0
-  );
+	const totalIngredients = $ingredients.length;
+	const lowStockIngredients = $ingredients.filter(
+		(i) => i.stockQuantity > 0 && i.stockQuantity <= i.minStockLevel
+	).length;
+	const outOfStockIngredients = $ingredients.filter((i) => i.stockQuantity === 0).length;
+	const totalValue = $ingredients.reduce((sum, i) => sum + (i.unitPrice || 0) * i.stockQuantity, 0);
 
-  return {
-    totalIngredients,
-    lowStockIngredients,
-    outOfStockIngredients,
-    totalValue,
-  };
+	return {
+		totalIngredients,
+		lowStockIngredients,
+		outOfStockIngredients,
+		totalValue
+	};
 });
