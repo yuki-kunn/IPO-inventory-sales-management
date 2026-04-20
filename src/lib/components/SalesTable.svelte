@@ -1,20 +1,13 @@
 <script lang="ts">
 	import Badge from './ui/Badge.svelte';
 	import type { SalesData } from '$lib/types';
+	import { formatCurrency, formatPercentage } from '$lib/utils/formatters';
 
 	interface Props {
 		salesData: SalesData[];
 	}
 
 	let { salesData }: Props = $props();
-
-	function formatCurrency(value: number): string {
-		return `¥${value.toLocaleString()}`;
-	}
-
-	function formatPercentage(value: number): string {
-		return `${value.toFixed(1)}%`;
-	}
 </script>
 
 {#if salesData.length === 0}

@@ -9,10 +9,14 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import StatsCard from '$lib/components/StatsCard.svelte';
 	import WeatherIcon from '$lib/components/WeatherIcon.svelte';
+	import WeatherFilterButtons from '$lib/components/WeatherFilterButtons.svelte';
+	import PeriodSelector from '$lib/components/PeriodSelector.svelte';
 	import { dailySales } from '$lib/stores/dailySales.firestore';
 	import { darkMode } from '$lib/stores/darkMode';
 	import type { DailySales, SalesData, WeatherType } from '$lib/types';
 	import { DollarSign, Package, ShoppingCart } from 'lucide-svelte';
+	import { getWeatherLabel } from '$lib/utils/weatherFormatter';
+	import { formatCurrency, formatDate } from '$lib/utils/formatters';
 
 	let isDarkMode = $state(false);
 	let allSalesData = $state<DailySales[]>([]);
@@ -232,14 +236,6 @@
 		productDailyData = dailyData;
 	}
 
-	function formatCurrency(value: number): string {
-		return `¥${Math.round(value).toLocaleString()}`;
-	}
-
-	function formatDate(dateStr: string): string {
-		const date = new Date(dateStr);
-		return `${date.getMonth() + 1}/${date.getDate()}`;
-	}
 </script>
 
 <div class="bg-background min-h-screen">
@@ -275,32 +271,15 @@
 				</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<div class="grid gap-4 md:grid-cols-3">
-					<div>
-						<label for="startDate" class="mb-2 block text-sm font-medium">開始日</label>
-						<input
-							id="startDate"
-							type="date"
-							bind:value={startDate}
-							class="border-input bg-background w-full rounded-md border px-3 py-2"
-						/>
-					</div>
-					<div>
-						<label for="endDate" class="mb-2 block text-sm font-medium">終了日</label>
-						<input
-							id="endDate"
-							type="date"
-							bind:value={endDate}
-							class="border-input bg-background w-full rounded-md border px-3 py-2"
-						/>
-					</div>
-					<div class="flex items-end">
-						<Button onclick={calculatePeriodStats} class="w-full">
-							<BarChart3 class="mr-2 h-4 w-4" />
-							集計実行
-						</Button>
-					</div>
-				</div>
+				<PeriodSelector
+					{startDate}
+					{endDate}
+					onDateChange={(start, end) => {
+						startDate = start;
+						endDate = end;
+					}}
+					onCalculate={calculatePeriodStats}
+				/>
 			</CardContent>
 		</Card>
 
@@ -313,91 +292,13 @@
 				</CardTitle>
 			</CardHeader>
 			<CardContent>
-				<div class="flex flex-wrap gap-2">
-					<Button
-						variant={weatherFilter === 'all' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => {
-							weatherFilter = 'all';
-							calculatePeriodStats();
-						}}
-						class="touch-manipulation"
-					>
-						すべて
-					</Button>
-					<Button
-						variant={weatherFilter === 'sunny' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => {
-							weatherFilter = 'sunny';
-							calculatePeriodStats();
-						}}
-						class="flex touch-manipulation items-center gap-1"
-					>
-						<WeatherIcon weather="sunny" class="h-4 w-4" />
-						晴れ
-					</Button>
-					<Button
-						variant={weatherFilter === 'cloudy' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => {
-							weatherFilter = 'cloudy';
-							calculatePeriodStats();
-						}}
-						class="flex touch-manipulation items-center gap-1"
-					>
-						<WeatherIcon weather="cloudy" class="h-4 w-4" />
-						曇り
-					</Button>
-					<Button
-						variant={weatherFilter === 'rainy' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => {
-							weatherFilter = 'rainy';
-							calculatePeriodStats();
-						}}
-						class="flex touch-manipulation items-center gap-1"
-					>
-						<WeatherIcon weather="rainy" class="h-4 w-4" />
-						雨
-					</Button>
-					<Button
-						variant={weatherFilter === 'snowy' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => {
-							weatherFilter = 'snowy';
-							calculatePeriodStats();
-						}}
-						class="flex touch-manipulation items-center gap-1"
-					>
-						<WeatherIcon weather="snowy" class="h-4 w-4" />
-						雪
-					</Button>
-					<Button
-						variant={weatherFilter === 'other' ? 'default' : 'outline'}
-						size="sm"
-						onclick={() => {
-							weatherFilter = 'other';
-							calculatePeriodStats();
-						}}
-						class="touch-manipulation"
-					>
-						その他
-					</Button>
-				</div>
-				{#if weatherFilter !== 'all'}
-					<p class="text-muted-foreground mt-3 text-sm">
-						現在、{weatherFilter === 'sunny'
-							? '晴れ'
-							: weatherFilter === 'cloudy'
-								? '曇り'
-								: weatherFilter === 'rainy'
-									? '雨'
-									: weatherFilter === 'snowy'
-										? '雪'
-										: 'その他'}の日のみを表示しています
-					</p>
-				{/if}
+				<WeatherFilterButtons
+					{weatherFilter}
+					onFilterChange={(filter) => {
+						weatherFilter = filter;
+						calculatePeriodStats();
+					}}
+				/>
 			</CardContent>
 		</Card>
 
@@ -487,15 +388,7 @@
 											<div class="flex items-center gap-2">
 												<WeatherIcon weather={stat.weather} class="h-5 w-5" />
 												<span class="font-medium">
-													{stat.weather === 'sunny'
-														? '晴れ'
-														: stat.weather === 'cloudy'
-															? '曇り'
-															: stat.weather === 'rainy'
-																? '雨'
-																: stat.weather === 'snowy'
-																	? '雪'
-																	: 'その他'}
+													{getWeatherLabel(stat.weather)}
 												</span>
 											</div>
 										</td>

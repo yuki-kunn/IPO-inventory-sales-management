@@ -3,6 +3,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { Edit, Trash2 } from 'lucide-svelte';
+	import { getStockStatus, getStockBadgeVariant, getStockBadgeText } from '$lib/utils/stockStatus';
 
 	interface Props {
 		ingredients: Ingredient[];
@@ -11,36 +12,6 @@
 	}
 
 	let { ingredients, onEdit, onDelete }: Props = $props();
-
-	function getStockStatus(ingredient: Ingredient): 'ok' | 'low' | 'out' {
-		if (ingredient.stockQuantity === 0) return 'out';
-		if (ingredient.stockQuantity <= ingredient.minStockLevel) return 'low';
-		return 'ok';
-	}
-
-	function getStockBadgeVariant(
-		status: 'ok' | 'low' | 'out'
-	): 'default' | 'warning' | 'destructive' {
-		switch (status) {
-			case 'ok':
-				return 'default';
-			case 'low':
-				return 'warning';
-			case 'out':
-				return 'destructive';
-		}
-	}
-
-	function getStockBadgeText(status: 'ok' | 'low' | 'out'): string {
-		switch (status) {
-			case 'ok':
-				return '正常';
-			case 'low':
-				return '在庫少';
-			case 'out':
-				return '在庫切れ';
-		}
-	}
 </script>
 
 <div class="border-border overflow-x-auto rounded-lg border">
