@@ -8,9 +8,12 @@
 		FileWarning,
 		Calendar,
 		Upload,
-		BarChart3
+		BarChart3,
+		LogOut
 	} from 'lucide-svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { auth } from '$lib/stores/auth';
 	import Button from './ui/Button.svelte';
 
 	let isOpen = $state(false);
@@ -44,6 +47,12 @@
 			return currentPath === '/';
 		}
 		return currentPath.startsWith(href);
+	}
+
+	function handleLogout() {
+		auth.logout();
+		closeMenu();
+		goto('/login');
 	}
 </script>
 
@@ -104,5 +113,16 @@
 				</li>
 			{/each}
 		</ul>
+
+		<!-- ログアウトボタン -->
+		<div class="border-border mt-6 border-t pt-4">
+			<button
+				onclick={handleLogout}
+				class="hover:bg-destructive/90 flex w-full touch-manipulation items-center gap-3 rounded-lg bg-destructive px-4 py-3.5 text-destructive-foreground transition-colors sm:py-3"
+			>
+				<LogOut class="h-5 w-5 sm:h-5 sm:w-5" />
+				<span class="text-base font-medium sm:text-base">ログアウト</span>
+			</button>
+		</div>
 	</div>
 </nav>
