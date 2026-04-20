@@ -13,7 +13,10 @@ export const GET: RequestHandler = async () => {
 	}
 
 	try {
-		const notion = new Client({ auth: env.NOTION_API_KEY });
+		const notion = new Client({
+			auth: env.NOTION_API_KEY,
+			timeoutMs: 60000 // 60秒のタイムアウト
+		});
 
 		// 1. データベース情報を取得してデータソースIDを特定する
 		const db = await notion.databases.retrieve({
