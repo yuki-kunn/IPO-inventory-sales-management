@@ -8,74 +8,68 @@ import {
 	addDoc,
 	updateDoc,
 	deleteDoc,
-	onSnapshot,
 	Timestamp
 } from 'firebase/firestore';
 import { browser } from '$app/environment';
 
 const COLLECTION_NAME = 'recipes';
 
-// Firestoreのストア
+// Notionからレシピを取得
+async function fetchRecipesFromNotion(): Promise<Recipe[]> {
+	try {
+		const response = await fetch('/api/notion/recipes');
+
+		if (!response.ok) {
+			throw new Error(`Notion API error: ${response.status}`);
+		}
+
+		const data = await response.json();
+		return data.recipes || [];
+	} catch (error) {
+		console.error('[Recipes] Notionからの取得に失敗:', error);
+		return [];
+	}
+}
+
+// Notionのストア（Notion = マスターデータ、Firestore = トランザクション保存のみ）
 function createRecipesFirestoreStore() {
 	const { subscribe, set } = writable<Recipe[]>([]);
 
-	let unsubscribe: (() => void) | null = null;
-
-	// Firestoreのリアルタイムリスナーをセットアップ
-	function initListener() {
-		if (!browser || !db) {
-			console.log('[Recipes] ブラウザまたはDBが利用不可');
+	// 初回読み込み
+	async function loadRecipes() {
+		if (!browser) {
 			return;
 		}
 
-		console.log('[Recipes] リスナーを初期化中...');
-		const collectionRef = collection(db, COLLECTION_NAME);
+		const notionRecipes = await fetchRecipesFromNotion();
 
-		unsubscribe = onSnapshot(collectionRef, (snapshot) => {
-			const recipes: Recipe[] = [];
-			snapshot.forEach((doc) => {
-				const data = doc.data();
-				recipes.push({
-					id: doc.id,
-					productName: data.productName,
-					ingredients: data.ingredients || [],
-					createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-					updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
-				});
-			});
+		// 商品名順でソート
+		notionRecipes.sort((a, b) => a.productName.localeCompare(b.productName, 'ja'));
 
-			// クライアント側でソート（作成日時の降順）
-			recipes.sort((a, b) => {
-				return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-			});
-
-			console.log('[Recipes] データ更新:', recipes.length, '件');
-			recipes.forEach((r) => {
-				console.log('[Recipes]  -', r.productName, '原材料:', r.ingredients.length, '件');
-			});
-
-			set(recipes);
-		});
+		set(notionRecipes);
 	}
 
-	// ブラウザ環境でリスナーを初期化
-	if (browser && db) {
-		initListener();
+	// ブラウザ環境で初回読み込み
+	if (browser) {
+		loadRecipes();
 	}
 
 	return {
 		subscribe,
+		refresh: async () => {
+			await loadRecipes();
+		},
 		add: async (recipe: Omit<Recipe, 'id'>) => {
 			if (!browser || !db) return;
 
 			try {
-				console.log('[Recipes] レシピ追加:', recipe.productName);
 				await addDoc(collection(db, COLLECTION_NAME), {
 					...recipe,
 					createdAt: Timestamp.now(),
 					updatedAt: Timestamp.now()
 				});
-				console.log('[Recipes] レシピ追加成功:', recipe.productName);
+				// 追加後、Notionから再取得して表示を更新
+				await loadRecipes();
 			} catch (error) {
 				console.error('[Recipes] レシピ追加失敗:', error);
 				throw error;
@@ -90,8 +84,10 @@ function createRecipesFirestoreStore() {
 					...updatedRecipe,
 					updatedAt: Timestamp.now()
 				});
+				// 更新後、Notionから再取得して表示を更新
+				await loadRecipes();
 			} catch (error) {
-				console.error('Failed to update recipe:', error);
+				console.error('[Recipes] レシピ更新失敗:', error);
 				throw error;
 			}
 		},
@@ -100,27 +96,20 @@ function createRecipesFirestoreStore() {
 
 			try {
 				await deleteDoc(doc(db, COLLECTION_NAME, id));
+				// 削除後、Notionから再取得して表示を更新
+				await loadRecipes();
 			} catch (error) {
-				console.error('Failed to delete recipe:', error);
+				console.error('[Recipes] レシピ削除失敗:', error);
 				throw error;
 			}
 		},
 		findByProductName: async (productName: string): Promise<Recipe | undefined> => {
-			if (!browser || !db) return undefined;
+			if (!browser) return undefined;
 
 			try {
-				const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-				const recipe = snapshot.docs.find((doc) => doc.data().productName === productName);
-				if (!recipe) return undefined;
-
-				const data = recipe.data();
-				return {
-					id: recipe.id,
-					productName: data.productName,
-					ingredients: data.ingredients || [],
-					createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-					updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString()
-				};
+				// Notionから検索
+				const notionRecipes = await fetchRecipesFromNotion();
+				return notionRecipes.find((r) => r.productName === productName);
 			} catch (error) {
 				console.error('Failed to find recipe:', error);
 				return undefined;
@@ -133,14 +122,11 @@ function createRecipesFirestoreStore() {
 				const snapshot = await getDocs(collection(db, COLLECTION_NAME));
 				const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref));
 				await Promise.all(deletePromises);
+				// リセット後、Notionから再取得
+				await loadRecipes();
 			} catch (error) {
 				console.error('Failed to reset recipes:', error);
 				throw error;
-			}
-		},
-		destroy: () => {
-			if (unsubscribe) {
-				unsubscribe();
 			}
 		}
 	};

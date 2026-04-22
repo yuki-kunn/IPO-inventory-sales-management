@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChefHat, Plus, Edit, Trash2, Moon, Sun } from 'lucide-svelte';
+	import { ChefHat, Plus, Edit, Trash2, Moon, Sun, Download } from 'lucide-svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardContent from '$lib/components/ui/CardContent.svelte';
 	import CardHeader from '$lib/components/ui/CardHeader.svelte';
@@ -20,6 +20,7 @@
 	let showAddModal = $state(false);
 	let editingRecipe = $state<Recipe | null>(null);
 	let prefilledProductName = $state('');
+	let isImporting = $state(false);
 
 	// レシピモーダル用のステート
 	let modalFormData = $state({
@@ -55,6 +56,19 @@
 
 	function toggleDarkMode() {
 		darkMode.toggle();
+	}
+
+	async function handleImportFromNotion() {
+		isImporting = true;
+
+		try {
+			await recipes.refresh();
+			alert('Notionから最新レシピを取得しました');
+		} catch (error) {
+			alert(`レシピ取得に失敗しました: ${error}`);
+		} finally {
+			isImporting = false;
+		}
 	}
 
 	function handleEdit(recipe: Recipe) {
@@ -123,8 +137,6 @@
 				return;
 			}
 
-			console.log('[Recipes] 原材料を使用:', existingIngredient.name, 'ID:', existingIngredient.id);
-
 			recipeIngredients.push({
 				ingredientId: existingIngredient.id,
 				ingredientName: existingIngredient.name,
@@ -144,7 +156,6 @@
 				productName: modalFormData.productName,
 				ingredients: recipeIngredients
 			});
-			console.log('[Recipes] レシピ更新完了:', modalFormData.productName);
 		} else {
 			// 新規追加
 			const newRecipe: Omit<Recipe, 'id'> = {
@@ -156,7 +167,6 @@
 			await recipes.add(newRecipe);
 
 			// レシピを登録したら未登録商品リストから削除
-			console.log('[Recipes] 未登録商品リストから削除:', modalFormData.productName);
 			await unregisteredProducts.remove(modalFormData.productName);
 		}
 
@@ -181,6 +191,15 @@
 					{:else}
 						<Moon class="h-5 w-5" />
 					{/if}
+				</Button>
+				<Button
+					variant="outline"
+					onclick={handleImportFromNotion}
+					disabled={isImporting}
+					class="touch-manipulation"
+				>
+					<Download class="h-4 w-4" />
+					<span>{isImporting ? '取得中...' : 'Notionから取得'}</span>
 				</Button>
 				<Button onclick={openAddModal} class="touch-manipulation">
 					<Plus class="h-4 w-4" />
