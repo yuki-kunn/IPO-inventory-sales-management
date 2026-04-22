@@ -9,6 +9,7 @@
 		Calendar,
 		Upload,
 		BarChart3,
+		TrendingUp,
 		LogOut
 	} from 'lucide-svelte';
 	import { page } from '$app/stores';
@@ -39,7 +40,8 @@
 		{ href: '/recipes', label: '登録済み商品', icon: ChefHat },
 		{ href: '/unregistered', label: '未登録商品', icon: FileWarning },
 		{ href: '/calendar', label: '売上カレンダー', icon: Calendar },
-		{ href: '/analytics', label: '売上分析', icon: BarChart3 }
+		{ href: '/analytics', label: '売上分析', icon: BarChart3 },
+		{ href: '/forecast', label: '販売予測・発注管理', icon: TrendingUp }
 	];
 
 	function isActive(href: string): boolean {
