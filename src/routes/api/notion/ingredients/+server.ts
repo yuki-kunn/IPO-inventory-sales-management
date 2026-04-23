@@ -129,7 +129,7 @@ export const GET: RequestHandler = async () => {
 
 // Notionの在庫を更新
 export const POST: RequestHandler = async ({ request }) => {
-	if (!env.NOTION_API_KEY) {
+	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
 		return json({ error: 'Notion API設定がありません' }, { status: 500 });
 	}
 
@@ -140,25 +140,62 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: '更新データがありません' }, { status: 400 });
 		}
 
-		const notion = new Client({ auth: env.NOTION_API_KEY });
+		const notion = new Client({
+			auth: env.NOTION_API_KEY,
+			timeoutMs: 60000
+		});
 
-		// 全ての更新を並列実行
+		// 1. まずデータベース構造を取得して正しいプロパティ名を特定
+		const db = await notion.databases.retrieve({
+			database_id: env.NOTION_DATABASE_ID as string
+		});
+
+		if (!isFullDatabase(db)) {
+			throw new Error('データベース情報の詳細を取得できませんでした');
+		}
+
+		// 在庫数プロパティを探す（複数の候補から）
+		const stockPropertyName = Object.keys(db.properties).find(
+			(key) =>
+				key === '在庫数' ||
+				key === '在庫' ||
+				key.toLowerCase() === 'stock' ||
+				key.toLowerCase().includes('在庫')
+		);
+
+		if (!stockPropertyName) {
+			throw new Error('在庫数プロパティが見つかりません。Notionデータベースの設定を確認してください。');
+		}
+
+		console.log('[Notion API] 使用する在庫プロパティ名:', stockPropertyName);
+
+		// 2. 全ての更新を並列実行
 		await Promise.all(
 			updates.map(async (update: any) => {
-				await notion.pages.update({
-					page_id: update.id,
-					properties: {
-						在庫数: {
-							number: update.newStock
+				try {
+					await notion.pages.update({
+						page_id: update.id,
+						properties: {
+							[stockPropertyName]: {
+								number: update.newStock
+							}
 						}
-					}
-				});
+					});
+					console.log(`[Notion API] 更新成功: ${update.id} → ${update.newStock}`);
+				} catch (err: any) {
+					console.error(`[Notion API] ページ更新エラー (${update.id}):`, err.message);
+					throw err;
+				}
 			})
 		);
 
 		return json({ success: true });
 	} catch (error: any) {
 		console.error('[Notion API] 更新エラー:', error);
-		return json({ error: '更新に失敗しました', details: error.message }, { status: 500 });
+		return json({
+			error: '更新に失敗しました',
+			details: error.message,
+			code: error.code || 'UNKNOWN_ERROR'
+		}, { status: 500 });
 	}
 };
