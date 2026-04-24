@@ -42,6 +42,7 @@
 		"vite": "^5.0.0"
 	},
 	"dependencies": {
+		"@dataconnect/generated": "file:src/dataconnect-generated",
 		"@notionhq/client": "^5.19.0",
 		"firebase": "^12.12.0",
 		"lucide-svelte": "^0.469.0"
