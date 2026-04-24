@@ -39,7 +39,8 @@
 				await dailySales.addOrUpdate(
 					result.salesDate,
 					result.salesData,
-					processResult.totalUnregistered
+					processResult.totalUnregistered,
+					result.customerInfo
 				);
 
 				// 処理済み商品リストを作成
@@ -104,7 +105,8 @@
 					await dailySales.addOrUpdate(
 						result.salesDate,
 						result.salesData,
-						processResult.totalUnregistered
+						processResult.totalUnregistered,
+						result.customerInfo
 					);
 
 					const processedProductNames = processResult.processedProducts.map((p) => p.productName);
@@ -137,6 +139,7 @@
 				importedCount: 0,
 				errors: [{ row: 0, field: 'file', message: `エラーが発生しました: ${error}` }],
 				salesData: [],
+				customerInfo: [],
 				salesDate: ''
 			};
 		} finally {
@@ -359,12 +362,20 @@
 				<div>
 					<p class="mb-1 font-medium">対応フォーマット:</p>
 					<code class="bg-muted block rounded p-2 text-[10px] leading-relaxed">
-						商品名,カテゴリー,税区分,販売総売上,構成比%,粗利総額,構成比%,販売商品数,構成比%,返品商品数,構成比%,商品ID,商品コード,バーコード
+						商品名,種別1,種別2,カテゴリー,税区分,販売総売上,構成比%,粗利総額,構成比%,販売商品数,構成比%,返品商品数,構成比%,商品ID,商品コード,バーコード
 					</code>
+				</div>
+				<div class="space-y-1 text-[10px]">
+					<p class="font-medium">自動処理:</p>
+					<ul class="ml-4 list-disc space-y-0.5">
+						<li>種別1の「ホット」「アイス」を商品名の頭に自動付加</li>
+						<li>「店内」「お持ち帰り」などのキーワードを自動除外</li>
+						<li>カテゴリ「顧客情報」のデータを自動分離・集計</li>
+					</ul>
 				</div>
 				<p class="text-[10px]">
 					※ Shift-JIS/UTF-8対応 | ファイル名から日付を自動抽出（例:
-					商品別売上_20260413-20260413.csv）
+					バリエーション別売上_20260424-20260424.csv）
 				</p>
 			</div>
 		</div>

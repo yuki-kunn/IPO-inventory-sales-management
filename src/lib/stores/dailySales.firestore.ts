@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import type { DailySales, SalesData } from '$lib/types';
+import type { DailySales, SalesData, CustomerInfo } from '$lib/types';
 import { db } from '$lib/firebase';
 import {
 	collection,
@@ -15,6 +15,22 @@ import {
 import { browser } from '$app/environment';
 
 const COLLECTION_NAME = 'dailySales';
+
+// undefinedフィールドを削除するヘルパー関数
+function removeUndefinedFields(obj: any): any {
+	if (Array.isArray(obj)) {
+		return obj.map((item) => removeUndefinedFields(item));
+	} else if (obj !== null && typeof obj === 'object') {
+		const cleaned: any = {};
+		for (const key in obj) {
+			if (obj[key] !== undefined) {
+				cleaned[key] = removeUndefinedFields(obj[key]);
+			}
+		}
+		return cleaned;
+	}
+	return obj;
+}
 
 // Firestoreのストア
 function createDailySalesFirestoreStore() {
@@ -44,6 +60,7 @@ function createDailySalesFirestoreStore() {
 					totalQuantity: data.totalQuantity || 0,
 					productCount: data.productCount || 0,
 					sales: data.sales || [],
+					customerInfo: data.customerInfo || undefined,
 					inventoryProcessed: data.inventoryProcessed || false,
 					unregisteredCount: data.unregisteredCount || 0,
 					processedProducts: data.processedProducts || [],
@@ -85,7 +102,8 @@ function createDailySalesFirestoreStore() {
 		addOrUpdate: async (
 			salesDate: string,
 			salesData: SalesData[],
-			unregisteredCount: number = 0
+			unregisteredCount: number = 0,
+			customerInfo?: CustomerInfo[]
 		) => {
 			if (!browser || !db) {
 				console.log('[DailySales] ブラウザまたはDBが利用不可 - addOrUpdate');
@@ -99,7 +117,9 @@ function createDailySalesFirestoreStore() {
 					'件数:',
 					salesData.length,
 					'未登録:',
-					unregisteredCount
+					unregisteredCount,
+					'顧客情報:',
+					customerInfo?.length || 0
 				);
 
 				// 集計
@@ -114,7 +134,7 @@ function createDailySalesFirestoreStore() {
 				if (existingDoc.exists()) {
 					// 既存のデータがある場合は上書き
 					console.log('[DailySales] 既存データを更新:', salesDate);
-					await setDoc(dailySalesRef, {
+					const updateData: any = {
 						date: salesDate,
 						totalSales,
 						totalProfit,
@@ -127,11 +147,19 @@ function createDailySalesFirestoreStore() {
 						weather: existingDoc.data().weather || '',
 						createdAt: existingDoc.data().createdAt || Timestamp.now(),
 						updatedAt: Timestamp.now()
-					});
+					};
+					// customerInfoがある場合のみ追加
+					if (customerInfo && customerInfo.length > 0) {
+						updateData.customerInfo = customerInfo;
+					} else if (existingDoc.data().customerInfo) {
+						updateData.customerInfo = existingDoc.data().customerInfo;
+					}
+					// undefinedフィールドを削除してから保存
+					await setDoc(dailySalesRef, removeUndefinedFields(updateData));
 				} else {
 					// 新規作成
 					console.log('[DailySales] 新規データを作成:', salesDate);
-					await setDoc(dailySalesRef, {
+					const newData: any = {
 						date: salesDate,
 						totalSales,
 						totalProfit,
@@ -144,7 +172,13 @@ function createDailySalesFirestoreStore() {
 						processedProducts: [],
 						createdAt: Timestamp.now(),
 						updatedAt: Timestamp.now()
-					});
+					};
+					// customerInfoがある場合のみ追加
+					if (customerInfo && customerInfo.length > 0) {
+						newData.customerInfo = customerInfo;
+					}
+					// undefinedフィールドを削除してから保存
+					await setDoc(dailySalesRef, removeUndefinedFields(newData));
 				}
 
 				console.log('[DailySales] 保存成功:', salesDate);
@@ -246,6 +280,7 @@ function createDailySalesFirestoreStore() {
 						totalQuantity: data.totalQuantity || 0,
 						productCount: data.productCount || 0,
 						sales: data.sales || [],
+						customerInfo: data.customerInfo || undefined,
 						inventoryProcessed: data.inventoryProcessed || false,
 						unregisteredCount: data.unregisteredCount || 0,
 						processedProducts: data.processedProducts || [],

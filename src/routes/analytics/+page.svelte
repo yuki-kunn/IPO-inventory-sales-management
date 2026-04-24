@@ -13,7 +13,7 @@
 	import PeriodSelector from '$lib/components/PeriodSelector.svelte';
 	import { dailySales } from '$lib/stores/dailySales.firestore';
 	import { darkMode } from '$lib/stores/darkMode';
-	import type { DailySales, SalesData, WeatherType } from '$lib/types';
+	import type { DailySales, SalesData, WeatherType, CustomerInfo } from '$lib/types';
 	import { DollarSign, Package, ShoppingCart } from 'lucide-svelte';
 	import { getWeatherLabel } from '$lib/utils/weatherFormatter';
 	import { formatCurrency, formatDate } from '$lib/utils/formatters';
@@ -46,6 +46,42 @@
 			totalProfit: number;
 			dayCount: number;
 			avgDailySales: number;
+		}>
+	>([]);
+
+	// カテゴリ別集計
+	let categoryStats = $state<
+		Array<{
+			category: string;
+			totalSales: number;
+			totalProfit: number;
+			totalQuantity: number;
+			productCount: number;
+		}>
+	>([]);
+
+	// 顧客情報集計
+	let customerStats = $state<
+		Array<{
+			gender: string;
+			ageGroup: string;
+			count: number;
+		}>
+	>([]);
+
+	let genderSummary = $state<
+		Array<{
+			gender: string;
+			totalCount: number;
+			percentage: number;
+		}>
+	>([]);
+
+	let ageGroupSummary = $state<
+		Array<{
+			ageGroup: string;
+			totalCount: number;
+			percentage: number;
 		}>
 	>([]);
 
@@ -161,6 +197,12 @@
 
 		// 天候別統計を計算
 		calculateWeatherStats();
+
+		// カテゴリ別統計を計算
+		calculateCategoryStats();
+
+		// 顧客情報統計を計算
+		calculateCustomerStats();
 	}
 
 	function calculateWeatherStats() {
@@ -208,6 +250,116 @@
 				avgDailySales: data.dayCount > 0 ? data.totalSales / data.dayCount : 0
 			}))
 			.sort((a, b) => b.totalSales - a.totalSales);
+	}
+
+	function calculateCategoryStats() {
+		if (!startDate || !endDate) return;
+
+		// 期間内のデータを取得
+		let filteredData = allSalesData.filter((ds) => {
+			return ds.date >= startDate && ds.date <= endDate;
+		});
+
+		// 天候フィルタを適用
+		if (weatherFilter !== 'all') {
+			filteredData = filteredData.filter((ds) => ds.weather === weatherFilter);
+		}
+
+		// カテゴリ別にグループ化
+		const categoryMap = new Map<
+			string,
+			{
+				totalSales: number;
+				totalProfit: number;
+				totalQuantity: number;
+				productSet: Set<string>;
+			}
+		>();
+
+		filteredData.forEach((daily) => {
+			daily.sales.forEach((sale) => {
+				const category = sale.category || '未分類';
+				const existing = categoryMap.get(category) || {
+					totalSales: 0,
+					totalProfit: 0,
+					totalQuantity: 0,
+					productSet: new Set<string>()
+				};
+
+				existing.totalSales += sale.totalSales;
+				existing.totalProfit += sale.grossProfit;
+				existing.totalQuantity += sale.soldQuantity;
+				existing.productSet.add(sale.productName);
+
+				categoryMap.set(category, existing);
+			});
+		});
+
+		// 配列に変換してソート
+		categoryStats = Array.from(categoryMap.entries())
+			.map(([category, data]) => ({
+				category,
+				totalSales: data.totalSales,
+				totalProfit: data.totalProfit,
+				totalQuantity: data.totalQuantity,
+				productCount: data.productSet.size
+			}))
+			.sort((a, b) => b.totalSales - a.totalSales);
+	}
+
+	function calculateCustomerStats() {
+		if (!startDate || !endDate) return;
+
+		// 期間内のデータを取得
+		let filteredData = allSalesData.filter((ds) => {
+			return ds.date >= startDate && ds.date <= endDate;
+		});
+
+		// 天候フィルタを適用
+		if (weatherFilter !== 'all') {
+			filteredData = filteredData.filter((ds) => ds.weather === weatherFilter);
+		}
+
+		// 顧客情報を集計
+		const allCustomerInfo: CustomerInfo[] = [];
+		filteredData.forEach((daily) => {
+			if (daily.customerInfo && daily.customerInfo.length > 0) {
+				allCustomerInfo.push(...daily.customerInfo);
+			}
+		});
+
+		customerStats = allCustomerInfo;
+
+		// 性別別集計
+		const genderMap = new Map<string, number>();
+		allCustomerInfo.forEach((info) => {
+			const existing = genderMap.get(info.gender) || 0;
+			genderMap.set(info.gender, existing + info.count);
+		});
+
+		const totalCustomers = Array.from(genderMap.values()).reduce((sum, count) => sum + count, 0);
+		genderSummary = Array.from(genderMap.entries())
+			.map(([gender, count]) => ({
+				gender,
+				totalCount: count,
+				percentage: totalCustomers > 0 ? (count / totalCustomers) * 100 : 0
+			}))
+			.sort((a, b) => b.totalCount - a.totalCount);
+
+		// 年齢層別集計
+		const ageGroupMap = new Map<string, number>();
+		allCustomerInfo.forEach((info) => {
+			const existing = ageGroupMap.get(info.ageGroup) || 0;
+			ageGroupMap.set(info.ageGroup, existing + info.count);
+		});
+
+		ageGroupSummary = Array.from(ageGroupMap.entries())
+			.map(([ageGroup, count]) => ({
+				ageGroup,
+				totalCount: count,
+				percentage: totalCustomers > 0 ? (count / totalCustomers) * 100 : 0
+			}))
+			.sort((a, b) => b.totalCount - a.totalCount);
 	}
 
 	function selectProduct(productName: string) {
@@ -422,6 +574,157 @@
 					</div>
 				</CardContent>
 			</Card>
+		{/if}
+
+		<!-- カテゴリ別統計 -->
+		{#if categoryStats.length > 0}
+			<Card>
+				<CardHeader>
+					<CardTitle class="flex items-center gap-2">
+						<Package class="h-5 w-5" />
+						カテゴリ別売上統計
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<div class="overflow-x-auto">
+						<table class="w-full">
+							<thead>
+								<tr class="border-border border-b">
+									<th
+										class="text-muted-foreground px-4 py-3 text-left text-xs font-medium uppercase"
+										>カテゴリ</th
+									>
+									<th
+										class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>商品数</th
+									>
+									<th
+										class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>販売数</th
+									>
+									<th
+										class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>総売上</th
+									>
+									<th
+										class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>総粗利</th
+									>
+									<th
+										class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>粗利率</th
+									>
+								</tr>
+							</thead>
+							<tbody>
+								{#each categoryStats as stat}
+									<tr class="border-border hover:bg-muted/50 border-b transition-colors">
+										<td class="px-4 py-3">
+											<div class="flex items-center gap-2">
+												{#if stat.category === '基本'}
+													<Badge variant="default" class="text-xs">基本</Badge>
+												{:else if stat.category === 'イベント'}
+													<Badge variant="secondary" class="text-xs">イベント</Badge>
+												{:else}
+													<Badge variant="outline" class="text-xs">{stat.category}</Badge>
+												{/if}
+											</div>
+										</td>
+										<td class="px-4 py-3 text-right text-sm">{stat.productCount}種類</td>
+										<td class="px-4 py-3 text-right text-sm">{stat.totalQuantity}個</td>
+										<td class="px-4 py-3 text-right font-medium"
+											>{formatCurrency(stat.totalSales)}</td
+										>
+										<td class="px-4 py-3 text-right font-medium"
+											>{formatCurrency(stat.totalProfit)}</td
+										>
+										<td class="px-4 py-3 text-right text-sm">
+											{stat.totalSales > 0
+												? ((stat.totalProfit / stat.totalSales) * 100).toFixed(1)
+												: '0.0'}%
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</CardContent>
+			</Card>
+		{/if}
+
+		<!-- 顧客情報統計 -->
+		{#if genderSummary.length > 0 || ageGroupSummary.length > 0}
+			<div class="grid gap-6 md:grid-cols-2">
+				<!-- 性別統計 -->
+				{#if genderSummary.length > 0}
+					<Card>
+						<CardHeader>
+							<CardTitle class="flex items-center gap-2">
+								<ShoppingCart class="h-5 w-5" />
+								性別分布
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div class="space-y-3">
+								{#each genderSummary as stat}
+									<div class="flex items-center justify-between">
+										<div class="flex items-center gap-2">
+											<Badge variant="outline" class="text-xs">{stat.gender}</Badge>
+										</div>
+										<div class="flex items-center gap-3">
+											<span class="text-sm font-medium">{stat.totalCount}人</span>
+											<span class="text-muted-foreground text-xs"
+												>{stat.percentage.toFixed(1)}%</span
+											>
+										</div>
+									</div>
+									<div class="bg-muted h-2 overflow-hidden rounded-full">
+										<div
+											class="bg-primary h-full transition-all"
+											style="width: {stat.percentage}%"
+										></div>
+									</div>
+								{/each}
+							</div>
+						</CardContent>
+					</Card>
+				{/if}
+
+				<!-- 年齢層統計 -->
+				{#if ageGroupSummary.length > 0}
+					<Card>
+						<CardHeader>
+							<CardTitle class="flex items-center gap-2">
+								<ShoppingCart class="h-5 w-5" />
+								年齢層分布
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div class="space-y-3">
+								{#each ageGroupSummary as stat}
+									<div class="flex items-center justify-between">
+										<div class="flex items-center gap-2">
+											<Badge variant="outline" class="text-xs">{stat.ageGroup}</Badge>
+										</div>
+										<div class="flex items-center gap-3">
+											<span class="text-sm font-medium">{stat.totalCount}人</span>
+											<span class="text-muted-foreground text-xs"
+												>{stat.percentage.toFixed(1)}%</span
+											>
+										</div>
+									</div>
+									<div class="bg-muted h-2 overflow-hidden rounded-full">
+										<div
+											class="bg-primary h-full transition-all"
+											style="width: {stat.percentage}%"
+										></div>
+									</div>
+								{/each}
+							</div>
+						</CardContent>
+					</Card>
+				{/if}
+			</div>
 		{/if}
 
 		<!-- 商品別ランキング -->
