@@ -7,6 +7,33 @@ import { unregisteredProducts } from '$lib/stores/unregistered.firestore';
 // 無視する商品名のリスト（カテゴリなど）
 const IGNORED_PRODUCTS = ['男性', '女性'];
 
+// ジュースとしてNotionに登録されている商品のリスト
+const JUICE_PRODUCTS = ['リンゴ', 'マンゴー'];
+
+/**
+ * レシピを検索する（ジュース対応含む）
+ * @param productName 商品名
+ * @param allRecipes 全レシピ
+ * @returns 見つかったレシピまたはundefined
+ */
+function findRecipe(productName: string, allRecipes: Recipe[]): Recipe | undefined {
+	// まず完全一致で検索
+	let recipe = allRecipes.find((r) => r.productName === productName);
+
+	// 見つからない場合、ジュース商品なら「ジュース」を追加して再検索
+	if (!recipe && JUICE_PRODUCTS.includes(productName)) {
+		const juiceName = `${productName}ジュース`;
+		recipe = allRecipes.find((r) => r.productName === juiceName);
+		if (recipe) {
+			console.log(
+				`[findRecipe] ジュース名でマッチング: ${productName} → ${juiceName}`
+			);
+		}
+	}
+
+	return recipe;
+}
+
 /**
  * 売上データを処理し、レシピに基づいて原材料在庫を減算する
  * @param salesData 売上データ
@@ -46,13 +73,13 @@ export async function processSalesData(
 			console.log('[processSalesData] すでに処理済みの商品をスキップ:', sale.productName);
 			continue;
 		}
-		// レシピを検索
-		const recipe = currentRecipes.find((r) => r.productName === sale.productName);
+		// レシピを検索（ジュース対応含む）
+		const recipe = findRecipe(sale.productName, currentRecipes);
 		console.log(
 			'[processSalesData] 商品:',
 			sale.productName,
 			'レシピ:',
-			recipe ? '登録済み' : '未登録'
+			recipe ? `登録済み (${recipe.productName})` : '未登録'
 		);
 
 		if (recipe && recipe.ingredients.length > 0) {

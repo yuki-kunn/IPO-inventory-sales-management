@@ -54,14 +54,39 @@ function extractDateFromFilename(filename: string): string {
  * 商品名を正規化する（種別1の「ホット」「アイス」を商品名の頭に付ける）
  */
 function normalizeProductName(productName: string, variation1: string): string {
+	// ホット/アイスを適用する商品リスト
+	const hotColdProducts = [
+		'コーヒー',
+		'カフェラテ',
+		'ルイボス',
+		'ストレート',
+		'ミルクティー',
+		'カモミールティー'
+	];
+
 	// 種別1から「ホット」「アイス」を抽出
 	const hotMatch = variation1.match(/ホット/);
 	const iceMatch = variation1.match(/アイス/);
 
-	if (hotMatch) {
-		return `ホット${productName}`;
-	} else if (iceMatch) {
-		return `アイス${productName}`;
+	// ホット/アイス対象商品の場合のみ処理
+	const isHotColdProduct = hotColdProducts.some((product) => productName.includes(product));
+
+	if (isHotColdProduct && (hotMatch || iceMatch)) {
+		// 「ストレート」の場合は特別処理（お尻に「ティー」を追加）
+		if (productName === 'ストレート') {
+			if (hotMatch) {
+				return 'ホットストレートティー';
+			} else if (iceMatch) {
+				return 'アイスストレートティー';
+			}
+		}
+
+		// その他の商品は頭にホット/アイスを追加
+		if (hotMatch) {
+			return `ホット${productName}`;
+		} else if (iceMatch) {
+			return `アイス${productName}`;
+		}
 	}
 
 	return productName;
