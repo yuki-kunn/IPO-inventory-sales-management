@@ -83,7 +83,7 @@ export const GET: RequestHandler = async () => {
 			const name = getValue(nameProp) || '名前なし';
 
 			// 在庫数（必須）
-			const stockProp = getProp(page, '在庫数', '在庫', 'Stock', 'stock');
+			const stockProp = getProp(page, '在庫数', '在庫', '現在庫', 'Stock', 'stock');
 			const stockQuantity = getValue(stockProp) ?? 0;
 
 			// 単位
@@ -145,25 +145,26 @@ export const POST: RequestHandler = async ({ request }) => {
 			timeoutMs: 60000
 		});
 
-		// 1. まずデータベース構造を取得して正しいプロパティ名を特定
-		const db = await notion.databases.retrieve({
-			database_id: env.NOTION_DATABASE_ID as string
-		});
+		// 1. 最初の更新対象ページを取得してプロパティ名を特定
+		const firstPageId = updates[0].id;
+		const samplePage = await notion.pages.retrieve({ page_id: firstPageId });
 
-		if (!isFullDatabase(db)) {
-			throw new Error('データベース情報の詳細を取得できませんでした');
+		if (!('properties' in samplePage) || !samplePage.properties) {
+			throw new Error('ページのプロパティ情報が取得できませんでした');
 		}
 
 		// 在庫数プロパティを探す（複数の候補から）
-		const stockPropertyName = Object.keys(db.properties).find(
+		const stockPropertyName = Object.keys(samplePage.properties).find(
 			(key) =>
 				key === '在庫数' ||
 				key === '在庫' ||
+				key === '現在庫' ||
 				key.toLowerCase() === 'stock' ||
 				key.toLowerCase().includes('在庫')
 		);
 
 		if (!stockPropertyName) {
+			console.error('[Notion API] 利用可能なプロパティ:', Object.keys(samplePage.properties));
 			throw new Error('在庫数プロパティが見つかりません。Notionデータベースの設定を確認してください。');
 		}
 

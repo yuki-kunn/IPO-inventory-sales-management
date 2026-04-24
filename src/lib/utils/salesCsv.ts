@@ -1,10 +1,11 @@
-import type { SalesData, CSVImportError } from '$lib/types';
+import type { SalesData, CSVImportError, CustomerInfo } from '$lib/types';
 
 export interface ParsedSalesCSVResult {
 	success: boolean;
 	importedCount: number;
 	errors: CSVImportError[];
 	salesData: SalesData[];
+	customerInfo: CustomerInfo[]; // 顧客情報データ
 	salesDate: string; // 売上日（YYYY-MM-DD形式）
 }
 
@@ -49,10 +50,52 @@ function extractDateFromFilename(filename: string): string {
 	return today;
 }
 
+/**
+ * 商品名を正規化する（種別1の「ホット」「アイス」を商品名の頭に付ける）
+ */
+function normalizeProductName(productName: string, variation1: string): string {
+	// 種別1から「ホット」「アイス」を抽出
+	const hotMatch = variation1.match(/ホット/);
+	const iceMatch = variation1.match(/アイス/);
+
+	if (hotMatch) {
+		return `ホット${productName}`;
+	} else if (iceMatch) {
+		return `アイス${productName}`;
+	}
+
+	return productName;
+}
+
+/**
+ * 種別から除外すべきキーワードを削除する
+ */
+function cleanVariation(variation: string): string {
+	if (!variation) return '';
+
+	// 除外するキーワード
+	const excludePatterns = [
+		'店内',
+		'お持ち帰り',
+		'(店内)',
+		'(お持ち帰り)',
+		'(バリエーション未設定)',
+		'バリエーション未設定'
+	];
+
+	let cleaned = variation;
+	for (const pattern of excludePatterns) {
+		cleaned = cleaned.replace(pattern, '');
+	}
+
+	return cleaned.trim();
+}
+
 // Shift-JISエンコーディングのCSVファイルをパースする
 export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 	const errors: CSVImportError[] = [];
 	const salesData: SalesData[] = [];
+	const customerInfo: CustomerInfo[] = [];
 
 	// ファイル名から日付を抽出
 	const salesDate = extractDateFromFilename(file.name);
@@ -80,6 +123,7 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 				importedCount: 0,
 				errors: [{ row: 0, field: 'file', message: 'CSVファイルが空です' }],
 				salesData: [],
+				customerInfo: [],
 				salesDate: salesDate
 			};
 		}
@@ -87,9 +131,11 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 		// ヘッダー行をパース
 		const headers = lines[0].split(',').map((h) => h.trim());
 
-		// 期待されるヘッダー
+		// 新しい期待されるヘッダー（種別1、種別2を含む）
 		const expectedHeaders = [
 			'商品名',
+			'種別1',
+			'種別2',
 			'カテゴリー',
 			'税区分',
 			'販売総売上',
@@ -113,22 +159,47 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 			const values = line.split(',').map((v) => v.trim());
 
 			try {
+				const rawProductName = values[0] || '';
+				const variation1Raw = values[1] || '';
+				const variation2Raw = values[2] || '';
+				const category = values[3] || '';
+
+				// カテゴリが「顧客情報」の場合は顧客情報として処理
+				if (category === '顧客情報') {
+					const info: CustomerInfo = {
+						gender: rawProductName, // 商品名の列に性別が入っている
+						ageGroup: variation1Raw, // 種別1の列に年齢層が入っている
+						count: parseInt(values[9]) || 0 // 販売商品数の列に人数が入っている
+					};
+					customerInfo.push(info);
+					continue; // 商品データとしては処理しない
+				}
+
+				// 商品名を正規化（ホット/アイスを頭に付ける）
+				const normalizedProductName = normalizeProductName(rawProductName, variation1Raw);
+
+				// 種別をクリーンアップ（店内、お持ち帰りなどを除外）
+				const variation1 = cleanVariation(variation1Raw);
+				const variation2 = cleanVariation(variation2Raw);
+
 				const sales: SalesData = {
 					id: crypto.randomUUID(),
-					productName: values[0] || '',
-					category: values[1] || '',
-					taxType: values[2] || '',
-					totalSales: parseFloat(values[3]) || 0,
-					salesRatio: parseFloat(values[4]) || 0,
-					grossProfit: parseFloat(values[5]) || 0,
-					profitRatio: parseFloat(values[6]) || 0,
-					soldQuantity: parseInt(values[7]) || 0,
-					quantityRatio: parseFloat(values[8]) || 0,
-					returnedQuantity: parseInt(values[9]) || 0,
-					returnRatio: parseFloat(values[10]) || 0,
-					productId: values[11] || '',
-					productCode: values[12] || '',
-					barcode: values[13] || '',
+					productName: normalizedProductName,
+					variation1: variation1 || undefined,
+					variation2: variation2 || undefined,
+					category: category,
+					taxType: values[4] || '',
+					totalSales: parseFloat(values[5]) || 0,
+					salesRatio: parseFloat(values[6]) || 0,
+					grossProfit: parseFloat(values[7]) || 0,
+					profitRatio: parseFloat(values[8]) || 0,
+					soldQuantity: parseInt(values[9]) || 0,
+					quantityRatio: parseFloat(values[10]) || 0,
+					returnedQuantity: parseInt(values[11]) || 0,
+					returnRatio: parseFloat(values[12]) || 0,
+					productId: values[13] || '',
+					productCode: values[14] || '',
+					barcode: values[15] || '',
 					salesDate: salesDate,
 					importedAt: new Date().toISOString()
 				};
@@ -158,6 +229,7 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 			importedCount: salesData.length,
 			errors,
 			salesData,
+			customerInfo,
 			salesDate: salesDate
 		};
 	} catch (error) {
@@ -172,6 +244,7 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 				}
 			],
 			salesData: [],
+			customerInfo: [],
 			salesDate: new Date().toISOString().split('T')[0]
 		};
 	}
@@ -180,6 +253,8 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 export function exportSalesToCSV(salesData: SalesData[]): string {
 	const headers = [
 		'商品名',
+		'種別1',
+		'種別2',
 		'カテゴリー',
 		'税区分',
 		'販売総売上',
@@ -197,6 +272,8 @@ export function exportSalesToCSV(salesData: SalesData[]): string {
 
 	const rows = salesData.map((s) => [
 		s.productName,
+		s.variation1 || '',
+		s.variation2 || '',
 		s.category,
 		s.taxType,
 		s.totalSales,

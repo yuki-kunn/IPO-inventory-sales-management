@@ -60,7 +60,9 @@ export interface CSVImportResult {
 export interface SalesData {
 	id: string;
 	productName: string;
-	category: string;
+	variation1?: string; // 種別1（ホット、アイス、店内、お持ち帰りなど）
+	variation2?: string; // 種別2
+	category: string; // カテゴリー（基本、イベント、顧客情報など）
 	taxType: string;
 	totalSales: number;
 	salesRatio: number;
@@ -77,6 +79,13 @@ export interface SalesData {
 	importedAt: string;
 }
 
+// 顧客情報データ型定義
+export interface CustomerInfo {
+	gender: string; // 性別（男性、女性など）
+	ageGroup: string; // 年齢層（大学・専門、大人、ビジネス、高齢者など）
+	count: number; // 人数
+}
+
 // 天候タイプ
 export type WeatherType = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'other' | '';
 
@@ -89,6 +98,7 @@ export interface DailySales {
 	totalQuantity: number; // 日別総販売数
 	productCount: number; // 販売商品種類数
 	sales: SalesData[]; // その日の売上データ
+	customerInfo?: CustomerInfo[]; // 顧客情報データ
 	inventoryProcessed: boolean; // 原材料在庫減算が処理済みかどうか
 	unregisteredCount: number; // 未登録商品数
 	processedProducts: string[]; // 在庫減算済みの商品名リスト
