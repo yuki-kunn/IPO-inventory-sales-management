@@ -72,12 +72,18 @@ function normalizeProductName(productName: string, variation1: string): string {
 	const isHotColdProduct = hotColdProducts.some((product) => productName.includes(product));
 
 	if (isHotColdProduct && (hotMatch || iceMatch)) {
-		// 「ストレート」の場合は特別処理（お尻に「ティー」を追加）
+		// 「ストレート」「ルイボス」の場合は特別処理（お尻に「ティー」を追加）
 		if (productName === 'ストレート') {
 			if (hotMatch) {
 				return 'ホットストレートティー';
 			} else if (iceMatch) {
 				return 'アイスストレートティー';
+			}
+		} else if (productName === 'ルイボス') {
+			if (hotMatch) {
+				return 'ホットルイボスティー';
+			} else if (iceMatch) {
+				return 'アイスルイボスティー';
 			}
 		}
 
