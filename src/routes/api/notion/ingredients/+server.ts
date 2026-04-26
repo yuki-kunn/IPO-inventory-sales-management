@@ -2,14 +2,13 @@ import { json } from '@sveltejs/kit';
 import { Client, isFullDatabase } from '@notionhq/client';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
+import { createErrorResponse, createValidationError } from '$lib/utils/errorHandler';
 
 // Notionから原材料在庫データを取得
 export const GET: RequestHandler = async () => {
 	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
-		return json(
-			{ error: 'Notion API設定がありません。環境変数を確認してください。' },
-			{ status: 500 }
-		);
+		console.error('[Notion API] Missing configuration');
+		return json({ error: 'Notion API設定がありません' }, { status: 500 });
 	}
 
 	try {
@@ -122,14 +121,14 @@ export const GET: RequestHandler = async () => {
 
 		return json({ ingredients });
 	} catch (error: any) {
-		console.error('[Notion API] エラー:', error);
-		return json({ error: 'データ取得に失敗しました', details: error.message }, { status: 500 });
+		return createErrorResponse(error, 'データ取得に失敗しました', 500);
 	}
 };
 
 // Notionの在庫を更新
 export const POST: RequestHandler = async ({ request }) => {
 	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
+		console.error('[Notion API] Missing configuration');
 		return json({ error: 'Notion API設定がありません' }, { status: 500 });
 	}
 
@@ -137,7 +136,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const { updates } = await request.json();
 
 		if (!Array.isArray(updates) || updates.length === 0) {
-			return json({ error: '更新データがありません' }, { status: 400 });
+			return createValidationError('更新データがありません', 'updates');
 		}
 
 		const notion = new Client({
@@ -192,11 +191,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json({ success: true });
 	} catch (error: any) {
-		console.error('[Notion API] 更新エラー:', error);
-		return json({
-			error: '更新に失敗しました',
-			details: error.message,
-			code: error.code || 'UNKNOWN_ERROR'
-		}, { status: 500 });
+		return createErrorResponse(error, '在庫更新に失敗しました', 500);
 	}
 };

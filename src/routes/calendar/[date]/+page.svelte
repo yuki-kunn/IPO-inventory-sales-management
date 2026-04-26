@@ -20,7 +20,7 @@
 	import SalesTable from '$lib/components/SalesTable.svelte';
 	import WeatherIcon from '$lib/components/WeatherIcon.svelte';
 	import WeatherSelector from '$lib/components/WeatherSelector.svelte';
-	import { dailySales } from '$lib/stores/dailySales.firestore';
+	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import { fetchWeatherForDate } from '$lib/utils/weatherService';

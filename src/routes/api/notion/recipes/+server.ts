@@ -3,6 +3,7 @@ import { json } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import type { Recipe, RecipeIngredient, Ingredient } from '$lib/types';
+import { createErrorResponse } from '$lib/utils/errorHandler';
 
 // Notion プロパティの型
 type NotionProperty = {
@@ -25,10 +26,8 @@ type NotionQueryResponse = {
 
 export const GET: RequestHandler = async () => {
 	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
-		return json(
-			{ error: 'Notion API設定がありません。環境変数を確認してください。' },
-			{ status: 500 }
-		);
+		console.error('[Notion Recipes API] Missing configuration');
+		return json({ error: 'Notion API設定がありません' }, { status: 500 });
 	}
 
 	try {
@@ -42,10 +41,8 @@ export const GET: RequestHandler = async () => {
 		});
 
 		if (!isFullDatabase(db)) {
-			return json(
-				{ error: 'データベース情報の詳細を取得できませんでした。権限を確認してください。' },
-				{ status: 500 }
-			);
+			console.error('[Notion Recipes API] Database information incomplete');
+			return json({ error: 'データベース情報の取得に失敗しました' }, { status: 500 });
 		}
 
 		// データソースを検索
@@ -56,7 +53,8 @@ export const GET: RequestHandler = async () => {
 		);
 
 		if (!ingredientsDataSource || !menuDataSource || !recipeDataSource) {
-			return json({ error: '必要なデータソースが見つかりません' }, { status: 500 });
+			console.error('[Notion Recipes API] Required data sources not found');
+			return json({ error: 'データソースの取得に失敗しました' }, { status: 500 });
 		}
 
 		// 1. 原材料マスタを取得
@@ -201,9 +199,6 @@ export const GET: RequestHandler = async () => {
 
 		return json({ recipes });
 	} catch (err: any) {
-		return json(
-			{ error: 'レシピデータの取得に失敗しました', details: err.message },
-			{ status: 500 }
-		);
+		return createErrorResponse(err, 'レシピデータの取得に失敗しました', 500);
 	}
 };

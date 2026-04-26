@@ -7,7 +7,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import WeatherIcon from '$lib/components/WeatherIcon.svelte';
-	import { dailySales } from '$lib/stores/dailySales.firestore';
+	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
 	import type { DailySales } from '$lib/types';
 

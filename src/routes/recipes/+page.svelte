@@ -8,7 +8,7 @@
 	import Badge from '$lib/components/ui/Badge.svelte';
 	import { recipes } from '$lib/stores/recipes.firestore';
 	import { ingredients } from '$lib/stores/ingredients.firestore';
-	import { unregisteredProducts } from '$lib/stores/unregistered.firestore';
+	import { unregisteredProducts } from '$lib/stores/unregistered.api';
 	import { darkMode } from '$lib/stores/darkMode';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';

@@ -1,29 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 原材料コレクション
-    match /ingredients/{ingredientId} {
-      allow read, write: if true; // 開発中は全て許可
+    // === セキュリティポリシー ===
+    // クライアント側からの直接アクセスを完全に禁止
+    // すべての操作はサーバー側API（Firebase Admin SDK）経由でのみ実行
+    // これにより、認証機能なしでもセキュリティを担保
+
+    // すべてのコレクションへのアクセスを拒否
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // レシピコレクション
-    match /recipes/{recipeId} {
-      allow read, write: if true;
-    }
-
-    // 未登録商品コレクション
-    match /unregisteredProducts/{productName} {
-      allow read, write: if true;
-    }
-
-    // 売上データコレクション
-    match /sales/{saleId} {
-      allow read, write: if true;
-    }
-
-    // 日別売上データコレクション
-    match /dailySales/{dailySaleId} {
-      allow read, write: if true;
-    }
+    // 注意: Firebase Admin SDK経由のアクセスはこのルールの対象外
+    // Admin SDKは全権限を持つため、サーバー側で適切にアクセス制御を行う必要がある
   }
 }

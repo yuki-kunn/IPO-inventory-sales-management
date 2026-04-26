@@ -2,19 +2,20 @@ import { json } from '@sveltejs/kit';
 import { Client, isFullDatabase } from '@notionhq/client';
 import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
+import { createErrorResponse } from '$lib/utils/errorHandler';
+import { dev } from '$app/environment';
 
 // Notionインポート用データベースから原材料在庫データを取得
 export const GET: RequestHandler = async () => {
-	console.log('[Notion Import API] リクエスト受信');
-	console.log('[Notion Import API] NOTION_API_KEY:', env.NOTION_API_KEY ? '設定済み' : '未設定');
-	console.log('[Notion Import API] NOTION_DATABASE_ID_IMPORT:', env.NOTION_DATABASE_ID_IMPORT);
+	if (dev) {
+		console.log('[Notion Import API] リクエスト受信');
+		console.log('[Notion Import API] NOTION_API_KEY:', env.NOTION_API_KEY ? '設定済み' : '未設定');
+		console.log('[Notion Import API] NOTION_DATABASE_ID_IMPORT:', env.NOTION_DATABASE_ID_IMPORT);
+	}
 
 	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID_IMPORT) {
-		console.error('[Notion Import API] 環境変数が設定されていません');
-		return json(
-			{ error: 'Notion API設定がありません。環境変数を確認してください。' },
-			{ status: 500 }
-		);
+		console.error('[Notion Import API] Missing configuration');
+		return json({ error: 'Notion API設定がありません' }, { status: 500 });
 	}
 
 	try {
@@ -22,34 +23,34 @@ export const GET: RequestHandler = async () => {
 			auth: env.NOTION_API_KEY,
 			timeoutMs: 60000 // 60秒のタイムアウト
 		});
-		console.log('[Notion Import API] Notion Client初期化完了');
+		if (dev) console.log('[Notion Import API] Notion Client初期化完了');
 
 		// 1. データベース情報を取得してデータソースIDを特定する
-		console.log('[Notion Import API] データベース情報取得中...');
+		if (dev) console.log('[Notion Import API] データベース情報取得中...');
 		const db = await notion.databases.retrieve({
 			database_id: env.NOTION_DATABASE_ID_IMPORT as string
 		});
-		console.log('[Notion Import API] データベース取得成功');
+		if (dev) console.log('[Notion Import API] データベース取得成功');
 
 		if (!isFullDatabase(db)) {
-			console.error('[Notion Import API] データベース情報が不完全');
-			throw new Error('データベース情報の詳細を取得できませんでした。権限を確認してください。');
+			console.error('[Notion Import API] Database information incomplete');
+			throw new Error('データベース情報の取得に失敗しました');
 		}
 
 		const dataSourceId = db.data_sources?.[0]?.id;
-		console.log('[Notion Import API] データソースID:', dataSourceId);
+		if (dev) console.log('[Notion Import API] データソースID:', dataSourceId);
 
 		if (!dataSourceId) {
-			console.error('[Notion Import API] データソースIDが見つかりません');
-			throw new Error('データベース内に有効なデータソースが見つかりませんでした。');
+			console.error('[Notion Import API] Data source ID not found');
+			throw new Error('データソースの取得に失敗しました');
 		}
 
 		// 2. 特定したデータソースに対してクエリを実行（全件取得）
-		console.log('[Notion Import API] データソースクエリ実行中...');
+		if (dev) console.log('[Notion Import API] データソースクエリ実行中...');
 		const response = await notion.dataSources.query({
 			data_source_id: dataSourceId
 		});
-		console.log('[Notion Import API] クエリ成功 - 取得件数:', response.results.length);
+		if (dev) console.log('[Notion Import API] クエリ成功 - 取得件数:', response.results.length);
 
 		// プロパティ取得ヘルパー（完全一致または部分一致）
 		const getProp = (page: any, ...keywords: string[]) => {
@@ -91,10 +92,10 @@ export const GET: RequestHandler = async () => {
 		};
 
 		// データを整形
-		console.log('[Notion Import API] データ整形開始...');
+		if (dev) console.log('[Notion Import API] データ整形開始...');
 		const ingredients = response.results.map((page: any, index: number) => {
 			// デバッグ: 最初のページのプロパティを確認
-			if (index === 0) {
+			if (dev && index === 0) {
 				console.log(
 					'[Notion Import API] 利用可能なプロパティ:',
 					Object.keys(page.properties)
@@ -129,7 +130,7 @@ export const GET: RequestHandler = async () => {
 			const descProp = getProp(page, '説明', 'Description', 'description', 'メモ');
 			const description = getValue(descProp) || '';
 
-			console.log(`[Notion Import API] ${index + 1}. ${name}: 在庫=${stockQuantity}${unit}`);
+			if (dev) console.log(`[Notion Import API] ${index + 1}. ${name}: 在庫=${stockQuantity}${unit}`);
 
 			return {
 				id: page.id,
@@ -145,11 +146,9 @@ export const GET: RequestHandler = async () => {
 			};
 		});
 
-		console.log('[Notion Import API] 整形完了 - 件数:', ingredients.length);
+		if (dev) console.log('[Notion Import API] 整形完了 - 件数:', ingredients.length);
 		return json({ ingredients });
 	} catch (error: any) {
-		console.error('[Notion Import API] エラー:', error);
-		console.error('[Notion Import API] エラー詳細:', error.stack);
-		return json({ error: 'データ取得に失敗しました', details: error.message }, { status: 500 });
+		return createErrorResponse(error, 'データ取得に失敗しました', 500);
 	}
 };

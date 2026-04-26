@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
+import { createErrorResponse, createValidationError } from '$lib/utils/errorHandler';
 
 // WeatherAPI.comから天候データを取得
 export const GET: RequestHandler = async ({ url }) => {
@@ -8,13 +9,13 @@ export const GET: RequestHandler = async ({ url }) => {
 	const location = url.searchParams.get('location') || 'Izumi, Osaka, Japan';
 
 	if (!date) {
-		return json({ error: 'Date parameter is required' }, { status: 400 });
+		return createValidationError('日付パラメータが必要です', 'date');
 	}
 
 	const apiKey = env.WEATHER_API_KEY;
 	if (!apiKey) {
-		console.error('WEATHER_API_KEY is not set');
-		return json({ error: 'Weather API is not configured' }, { status: 500 });
+		console.error('[Weather API] WEATHER_API_KEY is not set');
+		return json({ error: '天候API設定がありません' }, { status: 500 });
 	}
 
 	try {
@@ -24,8 +25,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		const response = await fetch(apiUrl);
 
 		if (!response.ok) {
-			console.error('WeatherAPI error:', response.status, await response.text());
-			return json({ error: 'Failed to fetch weather data' }, { status: response.status });
+			const errorText = await response.text();
+			console.error('[Weather API] External API error:', response.status, errorText);
+			return json({ error: '天候データの取得に失敗しました' }, { status: 502 });
 		}
 
 		const data = await response.json();
@@ -55,8 +57,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			description: condition?.text || 'Unknown',
 			temp_c: data.forecast?.forecastday?.[0]?.day?.avgtemp_c
 		});
-	} catch (error) {
-		console.error('Weather API error:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+	} catch (error: any) {
+		return createErrorResponse(error, '天候データの取得中にエラーが発生しました', 500);
 	}
 };
