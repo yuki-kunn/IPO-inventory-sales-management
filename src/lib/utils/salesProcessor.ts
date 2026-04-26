@@ -2,7 +2,7 @@ import type { SalesData, SalesProcessResult, Recipe, Ingredient } from '$lib/typ
 import { get } from 'svelte/store';
 import { recipes } from '$lib/stores/recipes.firestore';
 import { ingredients } from '$lib/stores/ingredients.firestore';
-import { unregisteredProducts } from '$lib/stores/unregistered.firestore';
+import { unregisteredProducts } from '$lib/stores/unregistered.api';
 
 // 無視する商品名のリスト（カテゴリなど）
 const IGNORED_PRODUCTS = ['男性', '女性'];

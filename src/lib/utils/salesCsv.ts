@@ -128,6 +128,46 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 	const salesData: SalesData[] = [];
 	const customerInfo: CustomerInfo[] = [];
 
+	// === 入力検証 ===
+
+	// ファイルサイズチェック (最大10MB)
+	const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+	if (file.size > MAX_FILE_SIZE) {
+		return {
+			success: false,
+			importedCount: 0,
+			errors: [{ row: 0, field: 'file', message: 'ファイルサイズが大きすぎます（最大10MB）' }],
+			salesData: [],
+			customerInfo: [],
+			salesDate: new Date().toISOString().split('T')[0]
+		};
+	}
+
+	// ファイル名検証（危険な文字を含まないか）
+	const dangerousPattern = /[<>:"|?*\x00-\x1f]/;
+	if (dangerousPattern.test(file.name)) {
+		return {
+			success: false,
+			importedCount: 0,
+			errors: [{ row: 0, field: 'file', message: 'ファイル名に無効な文字が含まれています' }],
+			salesData: [],
+			customerInfo: [],
+			salesDate: new Date().toISOString().split('T')[0]
+		};
+	}
+
+	// ファイル拡張子チェック
+	if (!file.name.toLowerCase().endsWith('.csv')) {
+		return {
+			success: false,
+			importedCount: 0,
+			errors: [{ row: 0, field: 'file', message: 'CSVファイルのみアップロード可能です' }],
+			salesData: [],
+			customerInfo: [],
+			salesDate: new Date().toISOString().split('T')[0]
+		};
+	}
+
 	// ファイル名から日付を抽出
 	const salesDate = extractDateFromFilename(file.name);
 
@@ -153,6 +193,25 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 				success: false,
 				importedCount: 0,
 				errors: [{ row: 0, field: 'file', message: 'CSVファイルが空です' }],
+				salesData: [],
+				customerInfo: [],
+				salesDate: salesDate
+			};
+		}
+
+		// 行数制限（最大10,000行）
+		const MAX_ROWS = 10000;
+		if (lines.length > MAX_ROWS) {
+			return {
+				success: false,
+				importedCount: 0,
+				errors: [
+					{
+						row: 0,
+						field: 'file',
+						message: `CSVファイルの行数が多すぎます（最大${MAX_ROWS}行）`
+					}
+				],
 				salesData: [],
 				customerInfo: [],
 				salesDate: salesDate
@@ -194,6 +253,28 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 				const variation1Raw = values[1] || '';
 				const variation2Raw = values[2] || '';
 				const category = values[3] || '';
+
+				// XSS対策：商品名の長さ制限とHTMLタグ除去
+				const MAX_PRODUCT_NAME_LENGTH = 200;
+				if (rawProductName.length > MAX_PRODUCT_NAME_LENGTH) {
+					errors.push({
+						row: i + 1,
+						field: '商品名',
+						message: `商品名が長すぎます（最大${MAX_PRODUCT_NAME_LENGTH}文字）`
+					});
+					continue;
+				}
+
+				// HTMLタグやスクリプトを含む入力をブロック
+				const dangerousHtmlPattern = /<script|<iframe|javascript:|onerror=|onload=/i;
+				if (dangerousHtmlPattern.test(rawProductName)) {
+					errors.push({
+						row: i + 1,
+						field: '商品名',
+						message: '商品名に無効な文字が含まれています'
+					});
+					continue;
+				}
 
 				// カテゴリが「顧客情報」の場合は顧客情報として処理
 				if (category === '顧客情報') {

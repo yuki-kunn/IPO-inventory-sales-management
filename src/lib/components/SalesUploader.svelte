@@ -6,7 +6,7 @@
 	import CardHeader from './ui/CardHeader.svelte';
 	import CardTitle from './ui/CardTitle.svelte';
 	import { parseSalesCSV, type ParsedSalesCSVResult } from '$lib/utils/salesCsv';
-	import { dailySales } from '$lib/stores/dailySales.firestore';
+	import { dailySales } from '$lib/stores/dailySales.api';
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import type { SalesProcessResult } from '$lib/types';
 

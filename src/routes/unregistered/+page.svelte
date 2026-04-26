@@ -6,8 +6,8 @@
 	import CardTitle from '$lib/components/ui/CardTitle.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
-	import { unregisteredProducts } from '$lib/stores/unregistered.firestore';
-	import { dailySales } from '$lib/stores/dailySales.firestore';
+	import { unregisteredProducts } from '$lib/stores/unregistered.api';
+	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import type { UnregisteredProduct } from '$lib/types';

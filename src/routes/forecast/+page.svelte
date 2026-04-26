@@ -6,7 +6,7 @@
 	import CardTitle from '$lib/components/ui/CardTitle.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Badge from '$lib/components/ui/Badge.svelte';
-	import { dailySales } from '$lib/stores/dailySales.firestore';
+	import { dailySales } from '$lib/stores/dailySales.api';
 	import { recipes } from '$lib/stores/recipes.firestore';
 	import { ingredients } from '$lib/stores/ingredients.firestore';
 	import { darkMode } from '$lib/stores/darkMode';

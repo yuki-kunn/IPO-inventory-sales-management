@@ -11,7 +11,7 @@
 	import WeatherIcon from '$lib/components/WeatherIcon.svelte';
 	import WeatherFilterButtons from '$lib/components/WeatherFilterButtons.svelte';
 	import PeriodSelector from '$lib/components/PeriodSelector.svelte';
-	import { dailySales } from '$lib/stores/dailySales.firestore';
+	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
 	import type { DailySales, SalesData, WeatherType, CustomerInfo } from '$lib/types';
 	import { DollarSign, Package, ShoppingCart } from 'lucide-svelte';
