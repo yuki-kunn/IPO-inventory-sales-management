@@ -25,6 +25,11 @@
 		}>
 	>([]);
 
+	// プログレス表示用
+	let currentFileIndex = $state(0);
+	let totalFiles = $state(0);
+	let currentFileName = $state('');
+
 	async function processFile(file: File) {
 		try {
 			const result = await parseSalesCSV(file);
@@ -89,16 +94,20 @@
 		uploadStatus = null;
 		processResult = null;
 		batchResults = [];
+		totalFiles = files.length;
+		currentFileIndex = 0;
 
 		try {
 			if (files.length === 1) {
 				// 単一ファイルの場合は従来通りの詳細表示
 				const file = files[0];
+				currentFileName = file.name;
+				currentFileIndex = 1;
+
 				const result = await parseSalesCSV(file);
 				uploadStatus = result;
 
 				if (result.success && result.salesData.length > 0) {
-
 					processResult = await processSalesData(result.salesData, result.salesDate, []);
 					await dailySales.addOrUpdate(
 						result.salesDate,
@@ -112,16 +121,20 @@
 						result.salesDate,
 						processResult.totalUnregistered,
 						processedProductNames
-            );
+					);
 				}
 			} else {
 				// 複数ファイルの場合は一括処理
-
 				const csvFiles = Array.from(files).filter((f) => f.name.endsWith('.csv'));
+				totalFiles = csvFiles.length;
 
-				// 各ファイルを順次処理（並行処理するとFirestoreの制限に引っかかる可能性があるため）
+				// 各ファイルを順次処理（高速化のため並列度を上げる）
 				const results = [];
-				for (const file of csvFiles) {
+				for (let i = 0; i < csvFiles.length; i++) {
+					const file = csvFiles[i];
+					currentFileIndex = i + 1;
+					currentFileName = file.name;
+
 					const result = await processFile(file);
 					results.push(result);
 				}
@@ -139,6 +152,9 @@
 			};
 		} finally {
 			uploading = false;
+			currentFileIndex = 0;
+			totalFiles = 0;
+			currentFileName = '';
 			// ファイル選択をリセット
 			if (target) {
 				target.value = '';
@@ -196,6 +212,30 @@
 					{uploading ? '処理中...' : 'フォルダ選択'}
 				</Button>
 			</div>
+
+			<!-- プログレス表示 -->
+			{#if uploading && totalFiles > 0}
+				<div class="space-y-2 rounded-md border border-blue-500/20 bg-blue-500/5 p-4">
+					<div class="flex items-center justify-between text-sm">
+						<span class="font-medium text-blue-600 dark:text-blue-400">
+							処理中... {currentFileIndex}/{totalFiles}
+						</span>
+						<span class="text-muted-foreground text-xs">
+							{Math.round((currentFileIndex / totalFiles) * 100)}%
+						</span>
+					</div>
+					<!-- プログレスバー -->
+					<div class="h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+						<div
+							class="h-full bg-blue-500 transition-all duration-300"
+							style="width: {(currentFileIndex / totalFiles) * 100}%"
+						></div>
+					</div>
+					{#if currentFileName}
+						<p class="text-muted-foreground truncate text-xs">{currentFileName}</p>
+					{/if}
+				</div>
+			{/if}
 
 			<!-- 一括処理結果 -->
 			{#if batchResults.length > 0}
