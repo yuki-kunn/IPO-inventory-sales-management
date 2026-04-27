@@ -1,11 +1,25 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { adminDb } from '$lib/server/firebase-admin';
+import { adminDb, initializationError } from '$lib/server/firebase-admin';
 import { createErrorResponse, createValidationError } from '$lib/utils/errorHandler';
 import type { DailySales, SalesData, CustomerInfo } from '$lib/types';
+import { dev } from '$app/environment';
 
 // 日別売上データの取得
 export const GET: RequestHandler = async ({ url }) => {
+	// 開発環境でAdmin SDKが使えない場合
+	if (!adminDb) {
+		if (dev) {
+			console.warn('[DailySales API] 開発環境: Admin SDKが利用できません');
+			return json({ dailySales: [] });
+		}
+		return createErrorResponse(
+			initializationError || new Error('Database not initialized'),
+			'データベース接続に失敗しました',
+			500
+		);
+	}
+
 	try {
 		const date = url.searchParams.get('date');
 
@@ -38,6 +52,19 @@ export const GET: RequestHandler = async ({ url }) => {
 
 // 日別売上データの追加・更新
 export const POST: RequestHandler = async ({ request }) => {
+	// 開発環境でAdmin SDKが使えない場合
+	if (!adminDb) {
+		if (dev) {
+			console.warn('[DailySales API] 開発環境: Admin SDKが利用できません');
+			return json({ success: true, message: '開発環境では保存されません' });
+		}
+		return createErrorResponse(
+			initializationError || new Error('Database not initialized'),
+			'データベース接続に失敗しました',
+			500
+		);
+	}
+
 	try {
 		const body = await request.json();
 		const {
@@ -173,6 +200,19 @@ export const POST: RequestHandler = async ({ request }) => {
 
 // 日別売上データの削除
 export const DELETE: RequestHandler = async ({ url }) => {
+	// 開発環境でAdmin SDKが使えない場合
+	if (!adminDb) {
+		if (dev) {
+			console.warn('[DailySales API] 開発環境: Admin SDKが利用できません');
+			return json({ success: true, message: '開発環境では削除されません' });
+		}
+		return createErrorResponse(
+			initializationError || new Error('Database not initialized'),
+			'データベース接続に失敗しました',
+			500
+		);
+	}
+
 	try {
 		const date = url.searchParams.get('date');
 
