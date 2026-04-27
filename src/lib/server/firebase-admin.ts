@@ -18,60 +18,77 @@ function initializeFirebaseAdmin() {
 		return adminDb;
 	}
 
+	// 開発環境では初期化しない
+	if (dev) {
+		console.warn('[Firebase Admin] 開発環境: クライアント側Firestore SDKを使用してください');
+		initializationError = new Error('開発環境ではAdmin SDKは使用できません');
+		return null;
+	}
+
 	try {
-		// サービスアカウントキーがBase64エンコードされている場合
+		// サービスアカウントキーがBase64エンコードされている場合（推奨）
 		if (env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY) {
-			const serviceAccountJson = Buffer.from(
-				env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY,
-				'base64'
-			).toString('utf-8');
-			const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
+			try {
+				const serviceAccountJson = Buffer.from(
+					env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY,
+					'base64'
+				).toString('utf-8');
+				const serviceAccount = JSON.parse(serviceAccountJson) as ServiceAccount;
 
-			initializeApp({
-				credential: cert(serviceAccount)
-			});
+				initializeApp({
+					credential: cert(serviceAccount)
+				});
 
-			console.log('[Firebase Admin] Initialized with service account key');
+				console.log('[Firebase Admin] Initialized with service account key');
+				adminDb = getFirestore();
+				return adminDb;
+			} catch (error) {
+				console.error('[Firebase Admin] Service account key initialization failed:', error);
+				throw error;
+			}
 		}
-		// プロジェクトIDのみで初期化（Vercel/GCPなど、デフォルト認証が使える環境）
-		else if (env.FIREBASE_ADMIN_PROJECT_ID) {
+
+		// フォールバック: プロジェクトIDで初期化を試みる
+		const projectId = env.FIREBASE_ADMIN_PROJECT_ID || env.PUBLIC_FIREBASE_PROJECT_ID;
+
+		if (projectId) {
+			console.log('[Firebase Admin] Attempting initialization with project ID:', projectId);
+
 			initializeApp({
-				projectId: env.FIREBASE_ADMIN_PROJECT_ID
+				projectId: projectId
 			});
 
 			console.log('[Firebase Admin] Initialized with project ID');
+			adminDb = getFirestore();
+			return adminDb;
 		}
-		// 開発環境: PUBLIC_FIREBASE_PROJECT_IDを使用
-		else if (dev && env.PUBLIC_FIREBASE_PROJECT_ID) {
-			console.warn('[Firebase Admin] 開発環境: クライアント側Firestore SDKを使用してください');
-			console.warn('[Firebase Admin] Admin SDK機能は本番環境でのみ動作します');
 
-			// 開発環境では初期化しない（クライアント側SDKを使用）
-			initializationError = new Error('開発環境ではAdmin SDKは使用できません');
-			return null;
-		}
-		// 環境変数から自動検出
-		else {
-			initializeApp();
-			console.log('[Firebase Admin] Initialized with default credentials');
-		}
+		// 最後の手段: デフォルト認証
+		console.log('[Firebase Admin] Attempting default initialization');
+		initializeApp();
+		console.log('[Firebase Admin] Initialized with default credentials');
 
 		adminDb = getFirestore();
 		return adminDb;
 	} catch (error) {
 		console.error('[Firebase Admin] Initialization failed:', error);
+		console.error('[Firebase Admin] Error details:', {
+			hasServiceAccountKey: !!env.FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY,
+			hasAdminProjectId: !!env.FIREBASE_ADMIN_PROJECT_ID,
+			hasPublicProjectId: !!env.PUBLIC_FIREBASE_PROJECT_ID,
+			isDev: dev
+		});
+
 		initializationError = error as Error;
-
-		if (dev) {
-			console.warn('[Firebase Admin] 開発環境では通常のFirestore SDKを使用してください');
-			return null;
-		}
-
-		throw new Error('Firebase Admin SDK の初期化に失敗しました');
+		throw new Error(`Firebase Admin SDK の初期化に失敗しました: ${(error as Error).message}`);
 	}
 }
 
 // 初期化を実行
-initializeFirebaseAdmin();
+try {
+	initializeFirebaseAdmin();
+} catch (error) {
+	console.error('[Firebase Admin] Failed to initialize on startup:', error);
+}
 
 export { adminDb, initializationError };
