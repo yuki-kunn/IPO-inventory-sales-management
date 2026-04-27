@@ -164,8 +164,8 @@ export class ForecastService {
 				this.recipes,
 				this.salesHistory,
 				forecastDays
-			);
 
+			);
 			// 在庫切れリスク計算
 			const stockStatus = calculateStockoutRisk(ingredient.stockQuantity, demand.dailyDemand, 3);
 
@@ -200,8 +200,8 @@ export class ForecastService {
 			this.recipes,
 			this.salesHistory,
 			forecastDays
-		);
 
+		);
 		const stockStatus = calculateStockoutRisk(ingredient.stockQuantity, demand.dailyDemand, 3);
 
 		// 日別の在庫推移を計算

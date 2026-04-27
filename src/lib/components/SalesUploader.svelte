@@ -112,7 +112,7 @@
 						result.salesDate,
 						processResult.totalUnregistered,
 						processedProductNames
-					);
+            );
 				}
 			} else {
 				// 複数ファイルの場合は一括処理

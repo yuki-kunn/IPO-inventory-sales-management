@@ -58,12 +58,6 @@ function createUnregisteredProductsApiStore() {
 			if (!browser) return;
 
 			try {
-					'[Unregistered API] addOrUpdate:',
-					productName,
-					quantity,
-					'日付:',
-					date
-				);
 
 				const response = await fetch('/api/firestore/unregistered', {
 					method: 'POST',

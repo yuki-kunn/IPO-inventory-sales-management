@@ -86,9 +86,6 @@ export const GET: RequestHandler = async () => {
 		const ingredients = response.results.map((page: any, index: number) => {
 			// デバッグ: 最初のページのプロパティを確認
 			if (dev && index === 0) {
-					'[Notion Import API] 利用可能なプロパティ:',
-					Object.keys(page.properties)
-				);
 			}
 
 			// タイトルプロパティ（原材料名 or 商品名）

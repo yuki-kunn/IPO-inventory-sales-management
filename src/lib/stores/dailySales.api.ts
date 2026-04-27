@@ -63,16 +63,6 @@ function createDailySalesApiStore() {
 			if (!browser) return;
 
 			try {
-					'[DailySales API] 日別売上を追加/更新:',
-					salesDate,
-					'件数:',
-					salesData.length,
-					'未登録:',
-					unregisteredCount,
-					'顧客情報:',
-					customerInfo?.length || 0
-				);
-
 				const response = await fetch('/api/firestore/dailySales', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -105,11 +95,6 @@ function createDailySalesApiStore() {
 			if (!browser) return;
 
 			try {
-					'[DailySales API] 処理済みとしてマーク:',
-					date,
-					'処理商品数:',
-					processedProducts.length
-				);
 
 				const response = await fetch('/api/firestore/dailySales', {
 					method: 'POST',

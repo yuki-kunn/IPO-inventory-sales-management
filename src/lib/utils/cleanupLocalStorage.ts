@@ -25,8 +25,6 @@ export function cleanupLocalStorage() {
 	}
 
 	if (removedCount > 0) {
-			`[cleanupLocalStorage] ${removedCount}個のローカルストレージアイテムを削除しました`
-		);
 	} else {
 	}
 }

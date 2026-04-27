@@ -70,12 +70,6 @@ function createUnregisteredProductsFirestoreStore() {
 			}
 
 			try {
-					'[UnregisteredProducts] addOrUpdate:',
-					productName,
-					soldQuantity,
-					'日付:',
-					salesDate
-				);
 				const productRef = doc(db, COLLECTION_NAME, productName);
 				const productDoc = await getDoc(productRef);
 				const now = Timestamp.now();
@@ -98,7 +92,6 @@ function createUnregisteredProductsFirestoreStore() {
 						productName,
 						'売上日:',
 						updatedSalesDates
-					);
 				} else {
 					// 新規追加
 					await setDoc(productRef, {

@@ -41,16 +41,6 @@
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		if (ingredient) {
-				id: ingredient.id,
-				name,
-				unit,
-				stockQuantity,
-				minStockLevel,
-				unitPrice,
-				supplier,
-				description
-			});
-
 			try {
 				const updateData: any = {
 					name,

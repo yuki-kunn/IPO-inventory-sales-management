@@ -17,8 +17,8 @@ export async function fetchWeatherForDate(
 	try {
 		const response = await fetch(
 			`/api/weather?date=${date}&location=${encodeURIComponent(location)}`
-		);
 
+		);
 		if (!response.ok) {
 			console.error('Weather fetch failed:', response.status);
 			return null;

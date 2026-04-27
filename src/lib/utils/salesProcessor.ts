@@ -25,8 +25,6 @@ function findRecipe(productName: string, allRecipes: Recipe[]): Recipe | undefin
 		const juiceName = `${productName}ジュース`;
 		recipe = allRecipes.find((r) => r.productName === juiceName);
 		if (recipe) {
-				`[findRecipe] ジュース名でマッチング: ${productName} → ${juiceName}`
-			);
 		}
 	}
 
@@ -54,10 +52,6 @@ export async function processSalesData(
 	const currentRecipes = get(recipes);
 	const currentIngredients = get(ingredients);
 
-		salesDataCount: salesData.length,
-		recipesCount: currentRecipes.length,
-		alreadyProcessedCount: alreadyProcessedProducts.length
-	});
 
 	for (const sale of salesData) {
 		// 無視する商品をスキップ
@@ -71,11 +65,6 @@ export async function processSalesData(
 		}
 		// レシピを検索（ジュース対応含む）
 		const recipe = findRecipe(sale.productName, currentRecipes);
-			'[processSalesData] 商品:',
-			sale.productName,
-			'レシピ:',
-			recipe ? `登録済み (${recipe.productName})` : '未登録'
-		);
 
 		if (recipe && recipe.ingredients.length > 0) {
 			// レシピが登録されている場合、原材料在庫を減算
@@ -108,7 +97,6 @@ export async function processSalesData(
 				sale.soldQuantity,
 				'日付:',
 				dateToUse
-			);
 			await unregisteredProducts.addOrUpdate(sale.productName, sale.soldQuantity, dateToUse);
 
 			const unregisteredProduct = {
@@ -123,9 +111,6 @@ export async function processSalesData(
 		}
 	}
 
-		totalProcessed: result.totalProcessed,
-		totalUnregistered: result.totalUnregistered
-	});
 
 	return result;
 }

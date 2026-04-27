@@ -118,12 +118,6 @@ function createIngredientsNotionStore() {
 					throw new Error('Failed to reduce stock');
 				}
 
-					'[Ingredients] 在庫減算:',
-					ingredient.name,
-					currentStock,
-					'→',
-					newStock
-				);
 
 				// 更新後に最新データを取得
 				await fetchIngredients();
