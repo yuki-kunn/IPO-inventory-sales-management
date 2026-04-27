@@ -33,7 +33,7 @@ npm install
 
 ### 2. Firebase のセットアップ
 
-Firebase の設定が必要です。詳細は [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) を参照してください。
+Firebase の設定が必要です。詳細は [FIREBASE_SETUP.md](./docs/FIREBASE_SETUP.md) を参照してください。
 
 1. Firebase プロジェクトを作成
 2. Firestore データベースを作成
