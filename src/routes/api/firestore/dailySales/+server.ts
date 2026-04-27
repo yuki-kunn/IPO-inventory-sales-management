@@ -10,7 +10,6 @@ export const GET: RequestHandler = async ({ url }) => {
 	// 開発環境でAdmin SDKが使えない場合
 	if (!adminDb) {
 		if (dev) {
-			console.warn('[DailySales API] 開発環境: Admin SDKが利用できません');
 			return json({ dailySales: [] });
 		}
 		return createErrorResponse(
@@ -55,7 +54,6 @@ export const POST: RequestHandler = async ({ request }) => {
 	// 開発環境でAdmin SDKが使えない場合
 	if (!adminDb) {
 		if (dev) {
-			console.warn('[DailySales API] 開発環境: Admin SDKが利用できません');
 			return json({ success: true, message: '開発環境では保存されません' });
 		}
 		return createErrorResponse(
@@ -203,7 +201,6 @@ export const DELETE: RequestHandler = async ({ url }) => {
 	// 開発環境でAdmin SDKが使えない場合
 	if (!adminDb) {
 		if (dev) {
-			console.warn('[DailySales API] 開発環境: Admin SDKが利用できません');
 			return json({ success: true, message: '開発環境では削除されません' });
 		}
 		return createErrorResponse(

@@ -85,7 +85,7 @@
 					`今回処理: ${result.totalProcessed}件\n` +
 					`未登録: ${result.totalUnregistered}件\n` +
 					`総処理済み: ${allProcessedProducts.length}件`
-			);
+        );
 		} catch (error) {
 			console.error('[UnregisteredProducts] 再計算エラー:', error);
 			alert(`再計算中にエラーが発生しました: ${error}`);

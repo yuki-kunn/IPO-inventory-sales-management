@@ -167,7 +167,6 @@ export const POST: RequestHandler = async ({ request }) => {
 			throw new Error('在庫数プロパティが見つかりません。Notionデータベースの設定を確認してください。');
 		}
 
-		console.log('[Notion API] 使用する在庫プロパティ名:', stockPropertyName);
 
 		// 2. 全ての更新を並列実行
 		await Promise.all(
@@ -181,7 +180,6 @@ export const POST: RequestHandler = async ({ request }) => {
 							}
 						}
 					});
-					console.log(`[Notion API] 更新成功: ${update.id} → ${update.newStock}`);
 				} catch (err: any) {
 					console.error(`[Notion API] ページ更新エラー (${update.id}):`, err.message);
 					throw err;

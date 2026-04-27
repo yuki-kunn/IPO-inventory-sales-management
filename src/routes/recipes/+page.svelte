@@ -133,7 +133,7 @@
 			if (!existingIngredient) {
 				alert(
 					`原材料「${ing.ingredientName}」が見つかりません。先に原材料マスタに登録してください。`
-				);
+          );
 				return;
 			}
 
