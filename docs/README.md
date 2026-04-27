@@ -2,21 +2,36 @@
 
 このフォルダには、プロジェクトの各種ドキュメントが含まれています。
 
-## セットアップ・環境構築
+## 📘 開発者向けドキュメント
+
+### アーキテクチャ・設計
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - 🆕 システムアーキテクチャと設計原則
+  - プロジェクト構成
+  - データフロー
+  - セキュリティアーキテクチャ
+  - コンポーネント設計原則
+  - パフォーマンス最適化
+  - 今後の拡張ポイント
+
+## 📗 セットアップ・環境構築
 
 - **[FIREBASE_SETUP.md](./FIREBASE_SETUP.md)** - Firebaseプロジェクトのセットアップ手順
 - **[ENV_FIX_GUIDE.md](./ENV_FIX_GUIDE.md)** - 環境変数のトラブルシューティング
 
-## デプロイ
+## 🚀 デプロイ
 
 - **[DEPLOYMENT.md](./DEPLOYMENT.md)** - 本番環境へのデプロイ手順（完全版）
 - **[VERCEL_DEPLOYMENT_FIX.md](./VERCEL_DEPLOYMENT_FIX.md)** - Vercelデプロイ時のエラー解決ガイド
 
-## セキュリティ
+## 🔒 セキュリティ
 
 - **[SECURITY.md](./SECURITY.md)** - セキュリティアーキテクチャと実装詳細
+  - Firestore完全ロックダウン
+  - CSRF保護
+  - レート制限
+  - セキュリティヘッダー
 
-## トラブルシューティング
+## 🔧 トラブルシューティング
 
 - **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - よくある問題と解決方法
 
@@ -24,13 +39,14 @@
 
 ```
 docs/
-├── README.md                    # このファイル
-├── FIREBASE_SETUP.md           # Firebaseセットアップガイド
-├── ENV_FIX_GUIDE.md            # 環境変数ガイド
-├── DEPLOYMENT.md               # デプロイガイド
-├── VERCEL_DEPLOYMENT_FIX.md    # Vercelエラー解決
-├── SECURITY.md                 # セキュリティドキュメント
-└── TROUBLESHOOTING.md          # トラブルシューティング
+├── README.md                     # このファイル
+├── ARCHITECTURE.md              # 🆕 アーキテクチャドキュメント
+├── FIREBASE_SETUP.md            # Firebaseセットアップガイド
+├── ENV_FIX_GUIDE.md             # 環境変数ガイド
+├── DEPLOYMENT.md                # デプロイガイド
+├── VERCEL_DEPLOYMENT_FIX.md     # Vercelエラー解決
+├── SECURITY.md                  # セキュリティドキュメント
+└── TROUBLESHOOTING.md           # トラブルシューティング
 ```
 
 ## 推奨する読む順番
