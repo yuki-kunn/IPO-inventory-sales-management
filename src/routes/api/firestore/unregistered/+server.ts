@@ -10,11 +10,8 @@ export const GET: RequestHandler = async () => {
 	// 開発環境でAdmin SDKが使えない場合
 	if (!adminDb) {
 		if (dev) {
-			console.warn('[Unregistered API] 開発環境: Admin SDKが利用できません');
-			// 開発環境では空配列を返す（クライアント側SDKを使用）
 			return json({ products: [] });
 		}
-		console.error('[Unregistered API] Admin DB not initialized:', initializationError);
 		return createErrorResponse(
 			initializationError || new Error('Database not initialized'),
 			'データベース接続に失敗しました',
@@ -44,7 +41,6 @@ export const POST: RequestHandler = async ({ request }) => {
 	// 開発環境でAdmin SDKが使えない場合
 	if (!adminDb) {
 		if (dev) {
-			console.warn('[Unregistered API] 開発環境: Admin SDKが利用できません');
 			return json({ success: true, message: '開発環境では保存されません' });
 		}
 		return createErrorResponse(
@@ -105,7 +101,6 @@ export const DELETE: RequestHandler = async ({ url }) => {
 	// 開発環境でAdmin SDKが使えない場合
 	if (!adminDb) {
 		if (dev) {
-			console.warn('[Unregistered API] 開発環境: Admin SDKが利用できません');
 			return json({ success: true, message: '開発環境では削除されません' });
 		}
 		return createErrorResponse(

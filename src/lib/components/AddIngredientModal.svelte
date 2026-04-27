@@ -27,7 +27,6 @@
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 
-		console.log('[AddIngredientModal] フォームデータ:', formData);
 
 		const newIngredient: any = {
 			name: formData.name,
@@ -49,7 +48,6 @@
 			newIngredient.description = formData.description;
 		}
 
-		console.log('[AddIngredientModal] 送信データ:', newIngredient);
 
 		try {
 			await ingredients.add(newIngredient);

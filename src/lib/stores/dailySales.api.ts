@@ -28,7 +28,6 @@ function createDailySalesApiStore() {
 				return new Date(b.date).getTime() - new Date(a.date).getTime();
 			});
 
-			console.log('[DailySales API] データ更新:', dailySales.length, '日分');
 			set(dailySales);
 		} catch (error) {
 			console.error('[DailySales API] データ取得エラー:', error);
@@ -64,7 +63,6 @@ function createDailySalesApiStore() {
 			if (!browser) return;
 
 			try {
-				console.log(
 					'[DailySales API] 日別売上を追加/更新:',
 					salesDate,
 					'件数:',
@@ -91,7 +89,6 @@ function createDailySalesApiStore() {
 					throw new Error('Failed to save daily sales');
 				}
 
-				console.log('[DailySales API] 保存成功:', salesDate);
 
 				// データを再取得
 				await fetchDailySales();
@@ -108,7 +105,6 @@ function createDailySalesApiStore() {
 			if (!browser) return;
 
 			try {
-				console.log(
 					'[DailySales API] 処理済みとしてマーク:',
 					date,
 					'処理商品数:',
@@ -130,7 +126,6 @@ function createDailySalesApiStore() {
 					throw new Error('Failed to mark as processed');
 				}
 
-				console.log('[DailySales API] マーク成功:', date);
 
 				// データを再取得
 				await fetchDailySales();
@@ -143,7 +138,6 @@ function createDailySalesApiStore() {
 			if (!browser) return;
 
 			try {
-				console.log('[DailySales API] 天候を更新:', date, '天候:', weather);
 
 				// 天候更新用の別APIを呼ぶか、またはaddOrUpdateを利用
 				// ここでは簡易的にgetして更新
@@ -173,7 +167,6 @@ function createDailySalesApiStore() {
 					})
 				});
 
-				console.log('[DailySales API] 天候更新成功:', date);
 
 				// データを再取得
 				await fetchDailySales();
@@ -186,7 +179,6 @@ function createDailySalesApiStore() {
 			if (!browser) return;
 
 			try {
-				console.log('[DailySales API] 削除:', date);
 
 				const response = await fetch(`/api/firestore/dailySales?date=${date}`, {
 					method: 'DELETE'
@@ -196,7 +188,6 @@ function createDailySalesApiStore() {
 					throw new Error('Failed to delete daily sales');
 				}
 
-				console.log('[DailySales API] 削除成功:', date);
 
 				// データを再取得
 				await fetchDailySales();
@@ -207,7 +198,6 @@ function createDailySalesApiStore() {
 		},
 		clear: async () => {
 			// 全削除は実装しない（安全のため）
-			console.warn('[DailySales API] 一括削除は使用できません');
 		},
 		getByDate: async (date: string): Promise<DailySales | null> => {
 			if (!browser) return null;

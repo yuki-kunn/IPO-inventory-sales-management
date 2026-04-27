@@ -25,7 +25,6 @@ function findRecipe(productName: string, allRecipes: Recipe[]): Recipe | undefin
 		const juiceName = `${productName}ジュース`;
 		recipe = allRecipes.find((r) => r.productName === juiceName);
 		if (recipe) {
-			console.log(
 				`[findRecipe] ジュース名でマッチング: ${productName} → ${juiceName}`
 			);
 		}
@@ -55,7 +54,6 @@ export async function processSalesData(
 	const currentRecipes = get(recipes);
 	const currentIngredients = get(ingredients);
 
-	console.log('[processSalesData] 処理開始:', {
 		salesDataCount: salesData.length,
 		recipesCount: currentRecipes.length,
 		alreadyProcessedCount: alreadyProcessedProducts.length
@@ -64,18 +62,15 @@ export async function processSalesData(
 	for (const sale of salesData) {
 		// 無視する商品をスキップ
 		if (IGNORED_PRODUCTS.includes(sale.productName)) {
-			console.log('[processSalesData] 無視する商品:', sale.productName);
 			continue;
 		}
 
 		// すでに処理済みの商品をスキップ
 		if (alreadyProcessedProducts.includes(sale.productName)) {
-			console.log('[processSalesData] すでに処理済みの商品をスキップ:', sale.productName);
 			continue;
 		}
 		// レシピを検索（ジュース対応含む）
 		const recipe = findRecipe(sale.productName, currentRecipes);
-		console.log(
 			'[processSalesData] 商品:',
 			sale.productName,
 			'レシピ:',
@@ -107,7 +102,6 @@ export async function processSalesData(
 		} else {
 			// レシピが未登録の場合
 			const dateToUse = salesDate || sale.salesDate || new Date().toISOString().split('T')[0];
-			console.log(
 				'[processSalesData] 未登録商品を追加:',
 				sale.productName,
 				'販売数:',
@@ -129,7 +123,6 @@ export async function processSalesData(
 		}
 	}
 
-	console.log('[processSalesData] 処理完了:', {
 		totalProcessed: result.totalProcessed,
 		totalUnregistered: result.totalUnregistered
 	});

@@ -24,11 +24,9 @@ function createUnregisteredProductsFirestoreStore() {
 	// Firestoreのリアルタイムリスナーをセットアップ
 	function initListener() {
 		if (!browser || !db) {
-			console.log('[UnregisteredProducts] ブラウザまたはDBが利用不可');
 			return;
 		}
 
-		console.log('[UnregisteredProducts] リスナーを初期化中...');
 		const collectionRef = collection(db, COLLECTION_NAME);
 
 		unsubscribe = onSnapshot(
@@ -51,7 +49,6 @@ function createUnregisteredProductsFirestoreStore() {
 					return new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime();
 				});
 
-				console.log('[UnregisteredProducts] データ更新:', products.length, '件');
 				set(products);
 			},
 			(error) => {
@@ -69,12 +66,10 @@ function createUnregisteredProductsFirestoreStore() {
 		subscribe,
 		addOrUpdate: async (productName: string, soldQuantity: number, salesDate: string) => {
 			if (!browser || !db) {
-				console.log('[UnregisteredProducts] ブラウザまたはDBが利用不可 - addOrUpdate');
 				return;
 			}
 
 			try {
-				console.log(
 					'[UnregisteredProducts] addOrUpdate:',
 					productName,
 					soldQuantity,
@@ -99,7 +94,6 @@ function createUnregisteredProductsFirestoreStore() {
 						firstSeenAt: currentData.firstSeenAt || now,
 						lastSeenAt: now
 					});
-					console.log(
 						'[UnregisteredProducts] 既存商品を更新:',
 						productName,
 						'売上日:',
@@ -113,7 +107,6 @@ function createUnregisteredProductsFirestoreStore() {
 						firstSeenAt: now,
 						lastSeenAt: now
 					});
-					console.log('[UnregisteredProducts] 新規商品を追加:', productName, '売上日:', salesDate);
 				}
 			} catch (error) {
 				console.error('[UnregisteredProducts] Failed to add/update:', error);
@@ -122,14 +115,11 @@ function createUnregisteredProductsFirestoreStore() {
 		},
 		remove: async (productName: string) => {
 			if (!browser || !db) {
-				console.log('[UnregisteredProducts] ブラウザまたはDBが利用不可 - remove');
 				return;
 			}
 
 			try {
-				console.log('[UnregisteredProducts] 削除:', productName);
 				await deleteDoc(doc(db, COLLECTION_NAME, productName));
-				console.log('[UnregisteredProducts] 削除成功:', productName);
 			} catch (error) {
 				console.error('[UnregisteredProducts] 削除失敗:', error);
 				throw error;

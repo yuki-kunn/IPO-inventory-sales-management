@@ -13,7 +13,6 @@ function createIngredientsNotionStore() {
 		if (!browser) return;
 
 		try {
-			console.log('[Ingredients] Notionからデータ取得中...');
 			const response = await fetch('/api/notion/ingredients');
 
 			if (!response.ok) {
@@ -23,9 +22,7 @@ function createIngredientsNotionStore() {
 			const data = await response.json();
 
 			if (data.ingredients) {
-				console.log('[Ingredients] データ更新:', data.ingredients.length, '件');
 				data.ingredients.forEach((i: Ingredient) => {
-					console.log('[Ingredients]  -', i.name, '在庫:', i.stockQuantity, i.unit);
 				});
 				set(data.ingredients);
 			}
@@ -57,7 +54,6 @@ function createIngredientsNotionStore() {
 		refresh: fetchIngredients,
 		add: async (ingredient: Omit<Ingredient, 'id'>) => {
 			// 注意: Notionへの追加は現在未実装（手動でNotionに追加する想定）
-			console.warn('[Ingredients] Notionへの追加機能は未実装です。Notionから直接追加してください。');
 			// 追加後に最新データを取得
 			await fetchIngredients();
 		},
@@ -86,11 +82,9 @@ function createIngredientsNotionStore() {
 					throw error;
 				}
 			} else {
-				console.warn('[Ingredients] 在庫数以外の更新はNotionから直接行ってください');
 			}
 		},
 		remove: async (id: string) => {
-			console.warn('[Ingredients] 削除はNotionから直接行ってください');
 		},
 		reduceStock: async (ingredientId: string, quantity: number) => {
 			if (!browser) return;
@@ -124,7 +118,6 @@ function createIngredientsNotionStore() {
 					throw new Error('Failed to reduce stock');
 				}
 
-				console.log(
 					'[Ingredients] 在庫減算:',
 					ingredient.name,
 					currentStock,
@@ -140,7 +133,6 @@ function createIngredientsNotionStore() {
 			}
 		},
 		reset: async () => {
-			console.warn('[Ingredients] リセットはNotionから直接行ってください');
 		},
 		destroy: () => {
 			if (refreshInterval) {

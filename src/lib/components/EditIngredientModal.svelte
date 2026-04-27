@@ -41,7 +41,6 @@
 	async function handleSubmit(e: Event) {
 		e.preventDefault();
 		if (ingredient) {
-			console.log('[EditIngredientModal] 更新開始:', {
 				id: ingredient.id,
 				name,
 				unit,
@@ -71,10 +70,8 @@
 					updateData.description = description;
 				}
 
-				console.log('[EditIngredientModal] 送信データ:', updateData);
 
 				await ingredients.update(ingredient.id, updateData);
-				console.log('[EditIngredientModal] 更新成功');
 			} catch (error) {
 				console.error('[EditIngredientModal] 更新失敗:', error);
 				alert('更新に失敗しました: ' + error);

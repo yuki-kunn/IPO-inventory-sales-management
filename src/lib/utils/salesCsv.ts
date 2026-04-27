@@ -14,7 +14,6 @@ export interface ParsedSalesCSVResult {
  * 例: 商品別売上_20260413-20260413.csv → 2026-04-13
  */
 function extractDateFromFilename(filename: string): string {
-	console.log('[salesCsv] ファイル名:', filename);
 
 	// パターン1: 商品別売上_YYYYMMDD-YYYYMMDD.csv
 	const pattern1 = /(\d{8})-\d{8}/;
@@ -26,7 +25,6 @@ function extractDateFromFilename(filename: string): string {
 		const month = dateStr.substring(4, 6);
 		const day = dateStr.substring(6, 8);
 		const formattedDate = `${year}-${month}-${day}`;
-		console.log('[salesCsv] 抽出した日付:', formattedDate);
 		return formattedDate;
 	}
 
@@ -40,13 +38,11 @@ function extractDateFromFilename(filename: string): string {
 		const month = dateStr.substring(4, 6);
 		const day = dateStr.substring(6, 8);
 		const formattedDate = `${year}-${month}-${day}`;
-		console.log('[salesCsv] 抽出した日付:', formattedDate);
 		return formattedDate;
 	}
 
 	// 日付が見つからない場合は今日の日付を返す
 	const today = new Date().toISOString().split('T')[0];
-	console.log('[salesCsv] 日付が見つかりません。今日の日付を使用:', today);
 	return today;
 }
 

@@ -28,7 +28,6 @@ function createUnregisteredProductsApiStore() {
 				return new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime();
 			});
 
-			console.log('[Unregistered API] データ更新:', products.length, '件');
 			set(products);
 		} catch (error) {
 			console.error('[Unregistered API] データ取得エラー:', error);
@@ -59,7 +58,6 @@ function createUnregisteredProductsApiStore() {
 			if (!browser) return;
 
 			try {
-				console.log(
 					'[Unregistered API] addOrUpdate:',
 					productName,
 					quantity,
@@ -82,7 +80,6 @@ function createUnregisteredProductsApiStore() {
 					throw new Error('Failed to save unregistered product');
 				}
 
-				console.log('[Unregistered API] 保存成功:', productName);
 
 				// データを再取得
 				await fetchUnregisteredProducts();
@@ -95,7 +92,6 @@ function createUnregisteredProductsApiStore() {
 			if (!browser) return;
 
 			try {
-				console.log('[Unregistered API] 削除:', productName);
 
 				const response = await fetch(
 					`/api/firestore/unregistered?productName=${encodeURIComponent(productName)}`,
@@ -108,7 +104,6 @@ function createUnregisteredProductsApiStore() {
 					throw new Error('Failed to delete unregistered product');
 				}
 
-				console.log('[Unregistered API] 削除成功:', productName);
 
 				// データを再取得
 				await fetchUnregisteredProducts();
@@ -119,7 +114,6 @@ function createUnregisteredProductsApiStore() {
 		},
 		clear: async () => {
 			// 全削除は実装しない（安全のため）
-			console.warn('[Unregistered API] 一括削除は使用できません');
 		},
 		refresh: fetchUnregisteredProducts,
 		destroy: () => {

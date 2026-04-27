@@ -41,11 +41,9 @@ function createDailySalesFirestoreStore() {
 	// Firestoreのリアルタイムリスナーをセットアップ
 	function initListener() {
 		if (!browser || !db) {
-			console.log('[DailySales] ブラウザまたはDBが利用不可');
 			return;
 		}
 
-		console.log('[DailySales] リスナーを初期化中...');
 		const collectionRef = collection(db, COLLECTION_NAME);
 
 		unsubscribe = onSnapshot(collectionRef, (snapshot) => {
@@ -75,9 +73,7 @@ function createDailySalesFirestoreStore() {
 				return new Date(b.date).getTime() - new Date(a.date).getTime();
 			});
 
-			console.log('[DailySales] データ更新:', dailySales.length, '日分');
 			dailySales.forEach((ds) => {
-				console.log(
 					'[DailySales]  -',
 					ds.date,
 					'売上:',
@@ -106,12 +102,10 @@ function createDailySalesFirestoreStore() {
 			customerInfo?: CustomerInfo[]
 		) => {
 			if (!browser || !db) {
-				console.log('[DailySales] ブラウザまたはDBが利用不可 - addOrUpdate');
 				return;
 			}
 
 			try {
-				console.log(
 					'[DailySales] 日別売上を追加/更新:',
 					salesDate,
 					'件数:',
@@ -133,7 +127,6 @@ function createDailySalesFirestoreStore() {
 
 				if (existingDoc.exists()) {
 					// 既存のデータがある場合は上書き
-					console.log('[DailySales] 既存データを更新:', salesDate);
 					const updateData: any = {
 						date: salesDate,
 						totalSales,
@@ -158,7 +151,6 @@ function createDailySalesFirestoreStore() {
 					await setDoc(dailySalesRef, removeUndefinedFields(updateData));
 				} else {
 					// 新規作成
-					console.log('[DailySales] 新規データを作成:', salesDate);
 					const newData: any = {
 						date: salesDate,
 						totalSales,
@@ -181,7 +173,6 @@ function createDailySalesFirestoreStore() {
 					await setDoc(dailySalesRef, removeUndefinedFields(newData));
 				}
 
-				console.log('[DailySales] 保存成功:', salesDate);
 			} catch (error) {
 				console.error('[DailySales] 保存失敗:', error);
 				throw error;
@@ -193,12 +184,10 @@ function createDailySalesFirestoreStore() {
 			processedProducts: string[]
 		) => {
 			if (!browser || !db) {
-				console.log('[DailySales] ブラウザまたはDBが利用不可 - markAsProcessed');
 				return;
 			}
 
 			try {
-				console.log(
 					'[DailySales] 処理済みとしてマーク:',
 					date,
 					'処理商品数:',
@@ -211,7 +200,6 @@ function createDailySalesFirestoreStore() {
 					processedProducts,
 					updatedAt: Timestamp.now()
 				});
-				console.log('[DailySales] マーク成功:', date);
 			} catch (error) {
 				console.error('[DailySales] マーク失敗:', error);
 				throw error;
@@ -219,18 +207,15 @@ function createDailySalesFirestoreStore() {
 		},
 		updateWeather: async (date: string, weather: string) => {
 			if (!browser || !db) {
-				console.log('[DailySales] ブラウザまたはDBが利用不可 - updateWeather');
 				return;
 			}
 
 			try {
-				console.log('[DailySales] 天候を更新:', date, '天候:', weather);
 				const dailySalesRef = doc(db, COLLECTION_NAME, date);
 				await updateDoc(dailySalesRef, {
 					weather,
 					updatedAt: Timestamp.now()
 				});
-				console.log('[DailySales] 天候更新成功:', date);
 			} catch (error) {
 				console.error('[DailySales] 天候更新失敗:', error);
 				throw error;
@@ -240,9 +225,7 @@ function createDailySalesFirestoreStore() {
 			if (!browser || !db) return;
 
 			try {
-				console.log('[DailySales] 削除:', date);
 				await deleteDoc(doc(db, COLLECTION_NAME, date));
-				console.log('[DailySales] 削除成功:', date);
 			} catch (error) {
 				console.error('[DailySales] 削除失敗:', error);
 				throw error;
@@ -262,7 +245,6 @@ function createDailySalesFirestoreStore() {
 		},
 		getByDate: async (date: string): Promise<DailySales | null> => {
 			if (!browser || !db) {
-				console.log('[DailySales] ブラウザまたはDBが利用不可 - getByDate');
 				return null;
 			}
 

@@ -14,7 +14,6 @@ export function cleanupLocalStorage() {
 		'cafe-unregistered-products'
 	];
 
-	console.log('[cleanupLocalStorage] ローカルストレージのクリーンアップを開始');
 
 	let removedCount = 0;
 	for (const key of keysToRemove) {
@@ -22,15 +21,12 @@ export function cleanupLocalStorage() {
 		if (value !== null) {
 			localStorage.removeItem(key);
 			removedCount++;
-			console.log(`[cleanupLocalStorage] 削除: ${key}`);
 		}
 	}
 
 	if (removedCount > 0) {
-		console.log(
 			`[cleanupLocalStorage] ${removedCount}個のローカルストレージアイテムを削除しました`
 		);
 	} else {
-		console.log('[cleanupLocalStorage] クリーンアップ不要（データなし）');
 	}
 }

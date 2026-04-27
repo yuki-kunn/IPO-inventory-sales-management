@@ -30,7 +30,6 @@
 			const result = await parseSalesCSV(file);
 
 			if (result.success && result.salesData.length > 0) {
-				console.log('[SalesUploader] 処理中:', file.name, '売上日:', result.salesDate);
 
 				// レシピに基づいて原材料在庫を減算（新規アップロードなので処理済み商品リストは空）
 				const processResult = await processSalesData(result.salesData, result.salesDate, []);
@@ -99,7 +98,6 @@
 				uploadStatus = result;
 
 				if (result.success && result.salesData.length > 0) {
-					console.log('[SalesUploader] 売上日:', result.salesDate);
 
 					processResult = await processSalesData(result.salesData, result.salesDate, []);
 					await dailySales.addOrUpdate(
@@ -118,10 +116,8 @@
 				}
 			} else {
 				// 複数ファイルの場合は一括処理
-				console.log('[SalesUploader] 一括処理開始:', files.length, 'ファイル');
 
 				const csvFiles = Array.from(files).filter((f) => f.name.endsWith('.csv'));
-				console.log('[SalesUploader] CSVファイル:', csvFiles.length, '件');
 
 				// 各ファイルを順次処理（並行処理するとFirestoreの制限に引っかかる可能性があるため）
 				const results = [];
@@ -131,7 +127,6 @@
 				}
 
 				batchResults = results;
-				console.log('[SalesUploader] 一括処理完了:', results);
 			}
 		} catch (error) {
 			uploadStatus = {
