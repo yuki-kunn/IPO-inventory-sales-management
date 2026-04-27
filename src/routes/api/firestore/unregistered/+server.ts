@@ -1,11 +1,27 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { adminDb } from '$lib/server/firebase-admin';
+import { adminDb, initializationError } from '$lib/server/firebase-admin';
 import { createErrorResponse, createValidationError } from '$lib/utils/errorHandler';
 import type { UnregisteredProduct } from '$lib/types';
+import { dev } from '$app/environment';
 
 // 未登録商品の取得
 export const GET: RequestHandler = async () => {
+	// 開発環境でAdmin SDKが使えない場合
+	if (!adminDb) {
+		if (dev) {
+			console.warn('[Unregistered API] 開発環境: Admin SDKが利用できません');
+			// 開発環境では空配列を返す（クライアント側SDKを使用）
+			return json({ products: [] });
+		}
+		console.error('[Unregistered API] Admin DB not initialized:', initializationError);
+		return createErrorResponse(
+			initializationError || new Error('Database not initialized'),
+			'データベース接続に失敗しました',
+			500
+		);
+	}
+
 	try {
 		const snapshot = await adminDb
 			.collection('unregisteredProducts')
@@ -25,6 +41,19 @@ export const GET: RequestHandler = async () => {
 
 // 未登録商品の追加・更新
 export const POST: RequestHandler = async ({ request }) => {
+	// 開発環境でAdmin SDKが使えない場合
+	if (!adminDb) {
+		if (dev) {
+			console.warn('[Unregistered API] 開発環境: Admin SDKが利用できません');
+			return json({ success: true, message: '開発環境では保存されません' });
+		}
+		return createErrorResponse(
+			initializationError || new Error('Database not initialized'),
+			'データベース接続に失敗しました',
+			500
+		);
+	}
+
 	try {
 		const body = await request.json();
 		const { action, productName, quantity, date } = body;
@@ -73,6 +102,19 @@ export const POST: RequestHandler = async ({ request }) => {
 
 // 未登録商品の削除
 export const DELETE: RequestHandler = async ({ url }) => {
+	// 開発環境でAdmin SDKが使えない場合
+	if (!adminDb) {
+		if (dev) {
+			console.warn('[Unregistered API] 開発環境: Admin SDKが利用できません');
+			return json({ success: true, message: '開発環境では削除されません' });
+		}
+		return createErrorResponse(
+			initializationError || new Error('Database not initialized'),
+			'データベース接続に失敗しました',
+			500
+		);
+	}
+
 	try {
 		const productName = url.searchParams.get('productName');
 
