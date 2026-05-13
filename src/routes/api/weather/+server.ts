@@ -19,21 +19,38 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	try {
-		// WeatherAPI.com History API
-		const apiUrl = `https://api.weatherapi.com/v1/history.json?key=${apiKey}&q=${encodeURIComponent(location)}&dt=${date}`;
+		// JST-aware today
+		const jstToday = new Intl.DateTimeFormat('ja-JP', {
+		  timeZone: 'Asia/Tokyo',
+		  year: 'numeric', month: '2-digit', day: '2-digit'
+		}).format(new Date()).replace(/\//g, '-');
+
+		const isFuture = date >= jstToday;
+		const apiUrl = isFuture
+		  ? `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${encodeURIComponent(location)}&days=3`
+		  : `https://api.weatherapi.com/v1/history.json?key=${apiKey}&q=${encodeURIComponent(location)}&dt=${date}`;
 
 		const response = await fetch(apiUrl);
 
 		if (!response.ok) {
-			const errorText = await response.text();
-			console.error('[Weather API] External API error:', response.status, errorText);
-			return json({ error: '天候データの取得に失敗しました' }, { status: 502 });
+		  const errorText = await response.text();
+		  console.error('[Weather API] External API error:', response.status, errorText);
+		  return json({ error: '天候データの取得に失敗しました' }, { status: 502 });
 		}
 
 		const data = await response.json();
 
+		// forecast.json returns forecastday[] — find matching date; history.json returns forecastday[0]
+		const forecastDay = isFuture
+		  ? data.forecast?.forecastday?.find((d: { date: string }) => d.date === date)
+		  : data.forecast?.forecastday?.[0];
+
+		if (isFuture && !forecastDay) {
+		  return json({ error: '指定日の天気予報データがありません（無料プランは3日先まで）' }, { status: 404 });
+		}
+
 		// 天候コードを簡易的に分類
-		const condition = data.forecast?.forecastday?.[0]?.day?.condition;
+		const condition = forecastDay?.day?.condition;
 		const conditionCode = condition?.code || 1000;
 
 		// WeatherAPI.comのコードを独自の天候タイプに変換
@@ -55,7 +72,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			date,
 			weather,
 			description: condition?.text || 'Unknown',
-			temp_c: data.forecast?.forecastday?.[0]?.day?.avgtemp_c
+			temp_c: forecastDay?.day?.avgtemp_c
 		});
 	} catch (error: any) {
 		return createErrorResponse(error, '天候データの取得中にエラーが発生しました', 500);
