@@ -34,6 +34,31 @@ export interface IngredientForecast {
 	};
 }
 
+/** 翌日の売上予測（商品別） */
+export interface TomorrowProductForecast {
+	productName: string;
+	predictedQuantity: number;
+	estimatedRevenue: number; // 過去平均単価 × 予測数量
+	avgUnitPrice: number;
+}
+
+/** 翌日の売上予測サマリー */
+export interface TomorrowForecast {
+	date: string;
+	dayOfWeek: number;
+	weather: WeatherType | null;
+	products: TomorrowProductForecast[];
+	totalPredictedQuantity: number;
+	totalEstimatedRevenue: number;
+	ingredientWarnings: {
+		ingredientName: string;
+		unit: string;
+		currentStock: number;
+		tomorrowDemand: number;
+		stockoutRisk: 'low' | 'medium' | 'high' | 'critical';
+	}[];
+}
+
 export interface ForecastSummary {
 	forecastPeriodDays: number;
 	forecastStartDate: string;
@@ -42,6 +67,7 @@ export interface ForecastSummary {
 	ingredientForecasts: IngredientForecast[];
 	dayOfWeekAnalysis: DayOfWeekAnalysis;
 	weatherAnalysis: WeatherAnalysis;
+	tomorrowForecast: TomorrowForecast | null;
 	// 後方互換のためのショートハンド
 	dayOfWeekFactors: Record<number, number>;
 	weatherFactors: Record<string, number>;
@@ -79,6 +105,12 @@ export class ForecastService {
 		const dayOfWeekAnalysis = calculateDayOfWeekFactors(this.salesHistory);
 		const weatherAnalysis = calculateWeatherFactors(this.salesHistory);
 
+		// 翌日予測（dailyWeather[1] = 明日の天候）
+		const tomorrowWeather = dailyWeather?.[1] ?? null;
+		const tomorrowForecast = forecastDays >= 2
+			? this.generateTomorrowForecast(productForecasts, ingredientForecasts, tomorrowWeather)
+			: null;
+
 		return {
 			forecastPeriodDays: forecastDays,
 			forecastStartDate: today.toISOString().split('T')[0],
@@ -87,9 +119,95 @@ export class ForecastService {
 			ingredientForecasts,
 			dayOfWeekAnalysis,
 			weatherAnalysis,
+			tomorrowForecast,
 			dayOfWeekFactors: dayOfWeekAnalysis.factors as Record<number, number>,
 			weatherFactors: weatherAnalysis.factors
 		};
+	}
+
+	/**
+	 * 翌日の詳細売上予測を生成
+	 */
+	private generateTomorrowForecast(
+		productForecasts: ProductForecast[],
+		ingredientForecasts: IngredientForecast[],
+		weather: WeatherType | null
+	): TomorrowForecast | null {
+		if (this.salesHistory.length === 0) return null;
+
+		const tomorrow = new Date();
+		tomorrow.setDate(tomorrow.getDate() + 1);
+		const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+		// 商品別の平均単価を過去データから計算
+		const avgUnitPrices = this.calculateAvgUnitPrices();
+
+		// 翌日予測 = productForecasts[i].forecasts[1]（index 1 = 明日）
+		const products: TomorrowProductForecast[] = productForecasts
+			.map((pf) => {
+				const qty = pf.forecasts[1] ?? 0;
+				const avgPrice = avgUnitPrices[pf.productName] ?? 0;
+				return {
+					productName: pf.productName,
+					predictedQuantity: qty,
+					estimatedRevenue: Math.round(qty * avgPrice),
+					avgUnitPrice: Math.round(avgPrice)
+				};
+			})
+			.filter((p) => p.predictedQuantity > 0)
+			.sort((a, b) => b.predictedQuantity - a.predictedQuantity);
+
+		const totalPredictedQuantity = products.reduce((sum, p) => sum + p.predictedQuantity, 0);
+		const totalEstimatedRevenue = products.reduce((sum, p) => sum + p.estimatedRevenue, 0);
+
+		// 翌日の原材料警告（在庫が明日需要を下回るもの）
+		const ingredientWarnings = ingredientForecasts
+			.filter((ing) => {
+				const tomorrowDemand = ing.demand.dailyDemand[1] ?? 0;
+				return tomorrowDemand > 0 && (
+					ing.stockStatus.stockoutRisk !== 'low' ||
+					tomorrowDemand > ing.currentStock
+				);
+			})
+			.map((ing) => ({
+				ingredientName: ing.ingredientName,
+				unit: ing.unit,
+				currentStock: ing.currentStock,
+				tomorrowDemand: ing.demand.dailyDemand[1] ?? 0,
+				stockoutRisk: ing.stockStatus.stockoutRisk
+			}))
+			.slice(0, 5); // 上位5件のみ
+
+		return {
+			date: tomorrowStr,
+			dayOfWeek: tomorrow.getDay(),
+			weather,
+			products,
+			totalPredictedQuantity,
+			totalEstimatedRevenue,
+			ingredientWarnings
+		};
+	}
+
+	/**
+	 * 商品別の過去平均単価を計算（売上金額 ÷ 販売数）
+	 */
+	private calculateAvgUnitPrices(): Record<string, number> {
+		const totals: Record<string, { revenue: number; quantity: number }> = {};
+
+		this.salesHistory.forEach((sale) => {
+			sale.sales?.forEach((s) => {
+				if (!totals[s.productName]) totals[s.productName] = { revenue: 0, quantity: 0 };
+				totals[s.productName].revenue += s.totalSales || 0;
+				totals[s.productName].quantity += s.soldQuantity || 0;
+			});
+		});
+
+		const prices: Record<string, number> = {};
+		for (const [name, { revenue, quantity }] of Object.entries(totals)) {
+			prices[name] = quantity > 0 ? revenue / quantity : 0;
+		}
+		return prices;
 	}
 
 	private generateProductForecasts(forecastDays: number, dailyWeather?: (WeatherType | null)[]): ProductForecast[] {

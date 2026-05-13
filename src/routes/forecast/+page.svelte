@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TrendingUp, AlertTriangle, ShoppingCart, Calendar, Sun, Moon, CloudRain } from 'lucide-svelte';
+	import { TrendingUp, AlertTriangle, ShoppingCart, Calendar, Sun, Moon, CloudRain, Zap } from 'lucide-svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardContent from '$lib/components/ui/CardContent.svelte';
 	import CardHeader from '$lib/components/ui/CardHeader.svelte';
@@ -10,7 +10,7 @@
 	import { recipes } from '$lib/stores/recipes.firestore';
 	import { ingredients } from '$lib/stores/ingredients.firestore';
 	import { darkMode } from '$lib/stores/darkMode';
-	import { ForecastService, type ForecastSummary } from '$lib/services/forecastService';
+	import { ForecastService, type ForecastSummary, type TomorrowForecast } from '$lib/services/forecastService';
 	import { fetchDailyWeatherForecast } from '$lib/utils/weatherService';
 	import type { WeatherType } from '$lib/types';
 	import type { FactorSource } from '$lib/utils/forecastUtils';
@@ -126,6 +126,22 @@
 		}
 	}
 
+	function getWeatherLabel(weather: string | null): string {
+		switch (weather) {
+			case 'sunny': return '☀️ 晴れ';
+			case 'cloudy': return '☁️ 曇り';
+			case 'rainy': return '🌧️ 雨';
+			case 'snowy': return '❄️ 雪';
+			case null: return '？ 不明';
+			default: return '🌤️ その他';
+		}
+	}
+
+	function formatRevenue(yen: number): string {
+		if (yen >= 10000) return `¥${(yen / 10000).toFixed(1)}万`;
+		return `¥${yen.toLocaleString()}`;
+	}
+
 	function getSourceBadgeClass(source: FactorSource): string {
 		switch (source) {
 			case 'prior':
@@ -227,6 +243,97 @@
 		</Card>
 
 		{#if forecastData}
+			<!-- 明日の売上予測 -->
+			{#if forecastData.tomorrowForecast}
+				{@const tf = forecastData.tomorrowForecast}
+				<Card class="border-primary/30 bg-primary/5 dark:bg-primary/10">
+					<CardHeader>
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-2">
+								<Zap class="text-primary h-5 w-5" />
+								<CardTitle>明日の売上予測</CardTitle>
+								<span class="text-muted-foreground text-sm">
+									{tf.date}（{getDayOfWeekName(tf.dayOfWeek)}曜日）
+								</span>
+							</div>
+							<span class="text-muted-foreground text-sm">
+								{getWeatherLabel(tf.weather)}
+							</span>
+						</div>
+					</CardHeader>
+					<CardContent>
+						<!-- 合計サマリー -->
+						<div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+							<div class="bg-background rounded-lg border p-3 text-center">
+								<p class="text-muted-foreground text-xs">予測販売数</p>
+								<p class="text-2xl font-bold">{tf.totalPredictedQuantity}<span class="text-muted-foreground text-sm font-normal">個</span></p>
+							</div>
+							{#if tf.totalEstimatedRevenue > 0}
+								<div class="bg-background rounded-lg border p-3 text-center">
+									<p class="text-muted-foreground text-xs">推計売上</p>
+									<p class="text-2xl font-bold">{formatRevenue(tf.totalEstimatedRevenue)}</p>
+								</div>
+							{/if}
+							<div class="bg-background rounded-lg border p-3 text-center">
+								<p class="text-muted-foreground text-xs">商品種類</p>
+								<p class="text-2xl font-bold">{tf.products.length}<span class="text-muted-foreground text-sm font-normal">種</span></p>
+							</div>
+						</div>
+
+						<!-- 商品別予測（上位10件） -->
+						<div class="mb-4">
+							<h4 class="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">商品別予測数量</h4>
+							<div class="space-y-1.5">
+								{#each tf.products.slice(0, 10) as product}
+									{@const maxQty = tf.products[0]?.predictedQuantity ?? 1}
+									<div class="flex items-center gap-2">
+										<span class="w-32 shrink-0 truncate text-sm" title={product.productName}>
+											{product.productName}
+										</span>
+										<div class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+											<div
+												class="bg-primary/70 h-full rounded-full transition-all"
+												style="width: {(product.predictedQuantity / maxQty) * 100}%"
+											></div>
+										</div>
+										<span class="w-12 text-right text-sm font-medium">{product.predictedQuantity}個</span>
+										{#if product.estimatedRevenue > 0}
+											<span class="text-muted-foreground w-16 text-right text-xs">{formatRevenue(product.estimatedRevenue)}</span>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						</div>
+
+						<!-- 原材料警告 -->
+						{#if tf.ingredientWarnings.length > 0}
+							<div>
+								<h4 class="mb-2 text-xs font-medium uppercase tracking-wide text-orange-600 dark:text-orange-400">
+									⚠️ 明日の在庫リスク
+								</h4>
+								<div class="space-y-1">
+									{#each tf.ingredientWarnings as w}
+										<div class="flex items-center justify-between rounded-md bg-orange-50 px-3 py-1.5 text-sm dark:bg-orange-900/20">
+											<span class="font-medium">{w.ingredientName}</span>
+											<span class="text-muted-foreground text-xs">
+												在庫 {w.currentStock}{w.unit} → 明日消費 {w.tomorrowDemand}{w.unit}
+											</span>
+											<Badge class={getRiskColor(w.stockoutRisk)}>
+												{getRiskLabel(w.stockoutRisk)}
+											</Badge>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						<p class="text-muted-foreground mt-3 text-xs">
+							※ 過去の販売実績と曜日・天候係数から推計。実際の売上と異なる場合があります。
+						</p>
+					</CardContent>
+				</Card>
+			{/if}
+
 			<!-- 発注推奨リスト -->
 			<Card>
 				<CardHeader>
