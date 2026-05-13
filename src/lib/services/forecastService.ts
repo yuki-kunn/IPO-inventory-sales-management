@@ -1,16 +1,18 @@
-import type { DailySales, Recipe, Ingredient } from '$lib/types';
+import type { DailySales, Recipe, Ingredient, WeatherType } from '$lib/types';
 import {
 	forecastProductSales,
 	forecastIngredientDemand,
 	calculateStockoutRisk,
 	calculateDayOfWeekFactors,
-	calculateWeatherFactors
+	calculateWeatherFactors,
+	type DayOfWeekAnalysis,
+	type WeatherAnalysis
 } from '$lib/utils/forecastUtils';
 
 export interface ProductForecast {
 	productName: string;
-	forecasts: number[]; // 日次予測値
-	totalForecast: number; // 予測期間の合計
+	forecasts: number[];
+	totalForecast: number;
 	trend: 'increasing' | 'stable' | 'decreasing';
 	confidence: 'high' | 'medium' | 'low';
 }
@@ -38,6 +40,9 @@ export interface ForecastSummary {
 	forecastEndDate: string;
 	productForecasts: ProductForecast[];
 	ingredientForecasts: IngredientForecast[];
+	dayOfWeekAnalysis: DayOfWeekAnalysis;
+	weatherAnalysis: WeatherAnalysis;
+	// 後方互換のためのショートハンド
 	dayOfWeekFactors: Record<number, number>;
 	weatherFactors: Record<string, number>;
 }
@@ -51,7 +56,7 @@ export class ForecastService {
 	private ingredients: Ingredient[];
 
 	constructor(salesHistory: DailySales[], recipes: Recipe[], ingredients: Ingredient[]) {
-		this.salesHistory = salesHistory.sort(
+		this.salesHistory = [...salesHistory].sort(
 			(a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
 		);
 		this.recipes = recipes;
@@ -60,21 +65,19 @@ export class ForecastService {
 
 	/**
 	 * 完全な予測レポートを生成
+	 * @param forecastDays 予測日数
+	 * @param dailyWeather 各予測日の天候（page側で事前取得して渡す）
 	 */
-	generateForecast(forecastDays: number = 7): ForecastSummary {
+	generateForecast(forecastDays: number = 7, dailyWeather?: (WeatherType | null)[]): ForecastSummary {
 		const today = new Date();
 		const endDate = new Date(today);
 		endDate.setDate(today.getDate() + forecastDays - 1);
 
-		// 商品別予測を生成
-		const productForecasts = this.generateProductForecasts(forecastDays);
+		const productForecasts = this.generateProductForecasts(forecastDays, dailyWeather);
+		const ingredientForecasts = this.generateIngredientForecasts(forecastDays, dailyWeather);
 
-		// 原材料別予測を生成
-		const ingredientForecasts = this.generateIngredientForecasts(forecastDays);
-
-		// 曜日・天候係数を計算
-		const dayOfWeekFactors = calculateDayOfWeekFactors(this.salesHistory);
-		const weatherFactors = calculateWeatherFactors(this.salesHistory);
+		const dayOfWeekAnalysis = calculateDayOfWeekFactors(this.salesHistory);
+		const weatherAnalysis = calculateWeatherFactors(this.salesHistory);
 
 		return {
 			forecastPeriodDays: forecastDays,
@@ -82,16 +85,14 @@ export class ForecastService {
 			forecastEndDate: endDate.toISOString().split('T')[0],
 			productForecasts,
 			ingredientForecasts,
-			dayOfWeekFactors,
-			weatherFactors
+			dayOfWeekAnalysis,
+			weatherAnalysis,
+			dayOfWeekFactors: dayOfWeekAnalysis.factors as Record<number, number>,
+			weatherFactors: weatherAnalysis.factors
 		};
 	}
 
-	/**
-	 * 商品別の販売予測を生成
-	 */
-	private generateProductForecasts(forecastDays: number): ProductForecast[] {
-		// すべての販売商品を抽出
+	private generateProductForecasts(forecastDays: number, dailyWeather?: (WeatherType | null)[]): ProductForecast[] {
 		const productNames = new Set<string>();
 
 		this.salesHistory.forEach((sale) => {
@@ -105,15 +106,12 @@ export class ForecastService {
 		const forecasts: ProductForecast[] = [];
 
 		productNames.forEach((productName) => {
-			const forecastValues = forecastProductSales(productName, this.salesHistory, forecastDays);
+			const forecastValues = forecastProductSales(productName, this.salesHistory, forecastDays, dailyWeather);
 
 			const totalForecast = forecastValues.reduce((sum, val) => sum + val, 0);
 
-			// トレンド分析（最初の3日と最後の3日を比較）
-			const earlyAvg =
-				forecastValues.slice(0, 3).reduce((sum, val) => sum + val, 0) / 3;
-			const lateAvg =
-				forecastValues.slice(-3).reduce((sum, val) => sum + val, 0) / 3;
+			const earlyAvg = forecastValues.slice(0, 3).reduce((sum, val) => sum + val, 0) / 3;
+			const lateAvg = forecastValues.slice(-3).reduce((sum, val) => sum + val, 0) / 3;
 
 			let trend: 'increasing' | 'stable' | 'decreasing';
 			if (lateAvg > earlyAvg * 1.1) {
@@ -124,7 +122,6 @@ export class ForecastService {
 				trend = 'stable';
 			}
 
-			// 信頼度（データ量に基づく）
 			const productSalesCount = this.salesHistory.filter((sale) =>
 				sale.sales?.some((p) => p.productName === productName)
 			).length;
@@ -147,26 +144,20 @@ export class ForecastService {
 			});
 		});
 
-		// 予測販売量でソート（降順）
 		return forecasts.sort((a, b) => b.totalForecast - a.totalForecast);
 	}
 
-	/**
-	 * 原材料別の需要予測を生成
-	 */
-	private generateIngredientForecasts(forecastDays: number): IngredientForecast[] {
+	private generateIngredientForecasts(forecastDays: number, dailyWeather?: (WeatherType | null)[]): IngredientForecast[] {
 		const forecasts: IngredientForecast[] = [];
 
 		this.ingredients.forEach((ingredient) => {
-			// 需要予測
 			const demand = forecastIngredientDemand(
 				ingredient.name,
 				this.recipes,
 				this.salesHistory,
-				forecastDays
-
+				forecastDays,
+				dailyWeather
 			);
-			// 在庫切れリスク計算
 			const stockStatus = calculateStockoutRisk(ingredient.stockQuantity, demand.dailyDemand, 3);
 
 			forecasts.push({
@@ -179,32 +170,21 @@ export class ForecastService {
 			});
 		});
 
-		// 在庫切れリスクの高い順にソート
 		const riskOrder = { critical: 0, high: 1, medium: 2, low: 3 };
 		return forecasts.sort(
 			(a, b) => riskOrder[a.stockStatus.stockoutRisk] - riskOrder[b.stockStatus.stockoutRisk]
 		);
 	}
 
-	/**
-	 * 特定の原材料の詳細予測を取得
-	 */
 	getIngredientDetailedForecast(ingredientName: string, forecastDays: number = 14) {
 		const ingredient = this.ingredients.find((ing) => ing.name === ingredientName);
 		if (!ingredient) {
 			return null;
 		}
 
-		const demand = forecastIngredientDemand(
-			ingredientName,
-			this.recipes,
-			this.salesHistory,
-			forecastDays
-
-		);
+		const demand = forecastIngredientDemand(ingredientName, this.recipes, this.salesHistory, forecastDays);
 		const stockStatus = calculateStockoutRisk(ingredient.stockQuantity, demand.dailyDemand, 3);
 
-		// 日別の在庫推移を計算
 		const stockProjection: { date: string; stock: number; demand: number }[] = [];
 		let currentStock = ingredient.stockQuantity;
 		const today = new Date();
