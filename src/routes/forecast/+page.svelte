@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TrendingUp, AlertTriangle, ShoppingCart, Calendar, Sun, Moon } from 'lucide-svelte';
+	import { TrendingUp, AlertTriangle, ShoppingCart, Calendar, Sun, Moon, CloudRain } from 'lucide-svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardContent from '$lib/components/ui/CardContent.svelte';
 	import CardHeader from '$lib/components/ui/CardHeader.svelte';
@@ -11,6 +11,9 @@
 	import { ingredients } from '$lib/stores/ingredients.firestore';
 	import { darkMode } from '$lib/stores/darkMode';
 	import { ForecastService, type ForecastSummary } from '$lib/services/forecastService';
+	import { fetchDailyWeatherForecast } from '$lib/utils/weatherService';
+	import type { WeatherType } from '$lib/types';
+	import type { FactorSource } from '$lib/utils/forecastUtils';
 
 	let currentDailySales = $state($dailySales);
 	let currentRecipes = $state($recipes);
@@ -19,6 +22,7 @@
 	let forecastDays = $state(7);
 	let forecastData = $state<ForecastSummary | null>(null);
 	let isCalculating = $state(false);
+	let weatherLoadingStatus = $state<'idle' | 'loading' | 'partial' | 'done'>('idle');
 
 	dailySales.subscribe((value) => {
 		currentDailySales = value;
@@ -40,14 +44,25 @@
 		darkMode.toggle();
 	}
 
-	function calculateForecast() {
+	async function calculateForecast() {
 		isCalculating = true;
+		weatherLoadingStatus = 'loading';
 
 		try {
+			// 予測期間の天候を事前取得（未来日は同曜日の過去実績で補完）
+			const today = new Date();
+			const dailyWeather = await fetchDailyWeatherForecast(
+				today,
+				forecastDays,
+				currentDailySales
+			);
+			weatherLoadingStatus = dailyWeather.some((w) => w !== null) ? 'done' : 'partial';
+
 			const service = new ForecastService(currentDailySales, currentRecipes, currentIngredients);
-			forecastData = service.generateForecast(forecastDays);
+			forecastData = service.generateForecast(forecastDays, dailyWeather as (WeatherType | null)[]);
 		} catch (error) {
 			console.error('[Forecast] 予測計算エラー:', error);
+			weatherLoadingStatus = 'idle';
 			alert(`予測計算に失敗しました: ${error instanceof Error ? error.message : String(error)}\n\nコンソールで詳細を確認してください。`);
 		} finally {
 			isCalculating = false;
@@ -98,6 +113,28 @@
 	function getDayOfWeekName(day: number): string {
 		const names = ['日', '月', '火', '水', '木', '金', '土'];
 		return names[day];
+	}
+
+	function getSourceLabel(source: FactorSource): string {
+		switch (source) {
+			case 'prior':
+				return '既定値';
+			case 'blended':
+				return '混合';
+			case 'empirical':
+				return '実績';
+		}
+	}
+
+	function getSourceBadgeClass(source: FactorSource): string {
+		switch (source) {
+			case 'prior':
+				return 'text-blue-600 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400';
+			case 'blended':
+				return 'text-yellow-600 bg-yellow-100 dark:bg-yellow-900/20 dark:text-yellow-400';
+			case 'empirical':
+				return 'text-green-600 bg-green-100 dark:bg-green-900/20 dark:text-green-400';
+		}
 	}
 
 	// 初回表示時に自動計算
@@ -171,9 +208,20 @@
 				</div>
 
 				{#if forecastData}
-					<p class="text-muted-foreground mt-4 text-sm">
-						予測期間: {forecastData.forecastStartDate} 〜 {forecastData.forecastEndDate}
-					</p>
+					<div class="mt-4 flex flex-wrap items-center gap-3">
+						<p class="text-muted-foreground text-sm">
+							予測期間: {forecastData.forecastStartDate} 〜 {forecastData.forecastEndDate}
+						</p>
+						{#if weatherLoadingStatus === 'done'}
+							<span class="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+								<CloudRain class="h-3 w-3" /> 天候データ反映済み
+							</span>
+						{:else if weatherLoadingStatus === 'partial'}
+							<span class="text-muted-foreground inline-flex items-center gap-1 text-xs">
+								<CloudRain class="h-3 w-3" /> 天候データ一部反映
+							</span>
+						{/if}
+					</div>
 				{/if}
 			</CardContent>
 		</Card>
@@ -320,23 +368,34 @@
 					</CardHeader>
 					<CardContent>
 						<div class="space-y-2">
-							{#each Object.entries(forecastData.dayOfWeekFactors).sort((a, b) => Number(a[0]) - Number(b[0])) as [day, factor]}
-								<div class="flex items-center justify-between">
-									<span class="text-sm">{getDayOfWeekName(Number(day))}曜日</span>
-									<div class="flex items-center gap-2">
-										<div class="bg-muted h-2 w-24 overflow-hidden rounded-full">
+							{#each Object.entries(forecastData.dayOfWeekAnalysis.factors).sort((a, b) => Number(a[0]) - Number(b[0])) as [day, factor]}
+								{@const source = forecastData.dayOfWeekAnalysis.sources[Number(day)] ?? 'prior'}
+								{@const count = forecastData.dayOfWeekAnalysis.counts[Number(day)] ?? 0}
+								<div class="flex items-center justify-between gap-2">
+									<span class="w-10 shrink-0 text-sm">{getDayOfWeekName(Number(day))}曜日</span>
+									<div class="flex flex-1 items-center gap-2">
+										<div class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
 											<div
 												class="bg-primary h-full"
-												style="width: {Math.min(100, factor * 100)}%"
+												style="width: {Math.min(100, (factor as number) * 100)}%"
 											></div>
 										</div>
-										<span class="text-muted-foreground text-xs">{(factor * 100).toFixed(0)}%</span>
+										<span class="text-muted-foreground w-10 text-right text-xs">{((factor as number) * 100).toFixed(0)}%</span>
 									</div>
+									<span
+										class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium {getSourceBadgeClass(source)}"
+										title="{count}件の実績データ"
+									>
+										{getSourceLabel(source)}
+									</span>
 								</div>
 							{/each}
 						</div>
 						<p class="text-muted-foreground mt-4 text-xs">
-							※ 100%が平均。高いほど売上が多い傾向。
+							※ 100%が平均。高いほど売上が多い傾向。<br />
+							<span class="text-blue-600 dark:text-blue-400">既定値</span>=業界調査値、
+							<span class="text-yellow-600 dark:text-yellow-400">混合</span>=調査値+実績の加重平均、
+							<span class="text-green-600 dark:text-green-400">実績</span>=実績データ主体
 						</p>
 					</CardContent>
 				</Card>
@@ -351,7 +410,9 @@
 					</CardHeader>
 					<CardContent>
 						<div class="space-y-2">
-							{#each Object.entries(forecastData.weatherFactors) as [weather, factor]}
+							{#each Object.entries(forecastData.weatherAnalysis.factors) as [weather, factor]}
+								{@const source = forecastData.weatherAnalysis.sources[weather] ?? 'prior'}
+								{@const count = forecastData.weatherAnalysis.counts[weather] ?? 0}
 								{@const weatherName =
 									weather === 'sunny'
 										? '晴れ'
@@ -362,22 +423,31 @@
 												: weather === 'snowy'
 													? '雪'
 													: 'その他'}
-								<div class="flex items-center justify-between">
-									<span class="text-sm">{weatherName}</span>
-									<div class="flex items-center gap-2">
-										<div class="bg-muted h-2 w-24 overflow-hidden rounded-full">
+								<div class="flex items-center justify-between gap-2">
+									<span class="w-10 shrink-0 text-sm">{weatherName}</span>
+									<div class="flex flex-1 items-center gap-2">
+										<div class="bg-muted h-2 flex-1 overflow-hidden rounded-full">
 											<div
 												class="bg-primary h-full"
-												style="width: {Math.min(100, factor * 100)}%"
+												style="width: {Math.min(100, (factor as number) * 100)}%"
 											></div>
 										</div>
-										<span class="text-muted-foreground text-xs">{(factor * 100).toFixed(0)}%</span>
+										<span class="text-muted-foreground w-10 text-right text-xs">{((factor as number) * 100).toFixed(0)}%</span>
 									</div>
+									<span
+										class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium {getSourceBadgeClass(source)}"
+										title="{count}件の実績データ"
+									>
+										{getSourceLabel(source)}
+									</span>
 								</div>
 							{/each}
 						</div>
 						<p class="text-muted-foreground mt-4 text-xs">
-							※ 100%が平均。高いほど売上が多い傾向。
+							※ 100%が平均。高いほど売上が多い傾向。<br />
+							<span class="text-blue-600 dark:text-blue-400">既定値</span>=業界調査値、
+							<span class="text-yellow-600 dark:text-yellow-400">混合</span>=調査値+実績の加重平均、
+							<span class="text-green-600 dark:text-green-400">実績</span>=実績データ主体
 						</p>
 					</CardContent>
 				</Card>
