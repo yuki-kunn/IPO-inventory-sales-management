@@ -47,7 +47,7 @@
 
 	async function calculateForecast() {
 		isCalculating = true;
-		activeTab = 'tomorrow';
+		activeTab = forecastDays === 2 ? 'tomorrow' : 'period';
 		weatherLoadingStatus = 'loading';
 
 		try {
@@ -194,6 +194,15 @@
 			<CardContent>
 				<div class="flex flex-wrap gap-2">
 					<Button
+						variant={forecastDays === 2 ? 'default' : 'outline'}
+						onclick={() => {
+							forecastDays = 2;
+							calculateForecast();
+						}}
+					>
+						明日
+					</Button>
+					<Button
 						variant={forecastDays === 7 ? 'default' : 'outline'}
 						onclick={() => {
 							forecastDays = 7;
@@ -238,8 +247,8 @@
 		<!-- スナップショットストリップ + タブエリア（計算中はdim） -->
 		<div class={isCalculating ? 'pointer-events-none opacity-50' : ''}>
 
-		<!-- スナップショットストリップ -->
-		{#if forecastData?.tomorrowForecast}
+		<!-- スナップショットストリップ（明日モードのみ） -->
+		{#if forecastDays === 2 && forecastData?.tomorrowForecast}
 			{@const tf = forecastData.tomorrowForecast}
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<div class="bg-card rounded-lg border p-3 text-center">
@@ -262,22 +271,8 @@
 		{/if}
 
 		<!-- タブ行 -->
-		{#if forecastData}
+		{#if forecastData && forecastDays !== 2}
 			<div class="border-border flex flex-wrap gap-1 border-b pb-1" role="tablist">
-				<Button
-					variant={activeTab === 'tomorrow' ? 'default' : 'ghost'}
-					onclick={() => activeTab = 'tomorrow'}
-					class="relative"
-					role="tab"
-					aria-selected={activeTab === 'tomorrow'}
-				>
-					明日の予測
-					{#if (forecastData.tomorrowForecast?.ingredientWarnings.length ?? 0) > 0}
-						<span class="ml-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-xs text-white">
-							{forecastData.tomorrowForecast?.ingredientWarnings.length}
-						</span>
-					{/if}
-				</Button>
 				<Button
 					variant={activeTab === 'period' ? 'default' : 'ghost'}
 					onclick={() => activeTab = 'period'}
@@ -298,7 +293,7 @@
 		{/if}
 
 		<!-- 明日の予測タブ -->
-		{#if activeTab === 'tomorrow' && forecastData}
+		{#if forecastDays === 2 && forecastData}
 			{#if forecastData.tomorrowForecast}
 				{@const tf = forecastData.tomorrowForecast}
 				{@const tomorrowDayFactor = (forecastData.dayOfWeekAnalysis.factors as Record<number,number>)[tf.dayOfWeek] ?? 1}
@@ -434,7 +429,7 @@
 		{/if}
 
 		<!-- 期間予測タブ -->
-		{#if activeTab === 'period' && forecastData}
+		{#if activeTab === 'period' && forecastDays !== 2 && forecastData}
 			<!-- 発注推奨リスト -->
 			<Card>
 				<CardHeader>
