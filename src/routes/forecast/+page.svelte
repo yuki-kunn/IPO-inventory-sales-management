@@ -23,6 +23,7 @@
 	let forecastData = $state<ForecastSummary | null>(null);
 	let isCalculating = $state(false);
 	let weatherLoadingStatus = $state<'idle' | 'loading' | 'partial' | 'done'>('idle');
+	let activeTab = $state<'tomorrow' | 'period' | 'factors'>('tomorrow');
 
 	dailySales.subscribe((value) => {
 		currentDailySales = value;
@@ -46,6 +47,7 @@
 
 	async function calculateForecast() {
 		isCalculating = true;
+		activeTab = 'tomorrow';
 		weatherLoadingStatus = 'loading';
 
 		try {
@@ -228,26 +230,90 @@
 						<p class="text-muted-foreground text-sm">
 							予測期間: {forecastData.forecastStartDate} 〜 {forecastData.forecastEndDate}
 						</p>
-						{#if weatherLoadingStatus === 'done'}
-							<span class="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-								<CloudRain class="h-3 w-3" /> 天候データ反映済み
-							</span>
-						{:else if weatherLoadingStatus === 'partial'}
-							<span class="text-muted-foreground inline-flex items-center gap-1 text-xs">
-								<CloudRain class="h-3 w-3" /> 天候データ一部反映
-							</span>
-						{/if}
 					</div>
 				{/if}
 			</CardContent>
 		</Card>
 
+		<!-- スナップショットストリップ + タブエリア（計算中はdim） -->
+		<div class={isCalculating ? 'pointer-events-none opacity-50' : ''}>
+
+		<!-- スナップショットストリップ -->
+		{#if forecastData?.tomorrowForecast}
+			{@const tf = forecastData.tomorrowForecast}
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+				<div class="bg-card rounded-lg border p-3 text-center">
+					<p class="text-muted-foreground text-xs">明日の予測販売数</p>
+					<p class="text-2xl font-bold">{tf.totalPredictedQuantity}<span class="text-muted-foreground text-sm font-normal">個</span></p>
+				</div>
+				<div class="bg-card rounded-lg border p-3 text-center">
+					<p class="text-muted-foreground text-xs">推計売上</p>
+					<p class="text-2xl font-bold">{tf.totalEstimatedRevenue > 0 ? formatRevenue(tf.totalEstimatedRevenue) : '—'}</p>
+				</div>
+				<div class="bg-card rounded-lg border p-3 text-center">
+					<p class="text-muted-foreground text-xs">トップ商品</p>
+					<p class="truncate text-sm font-semibold">{tf.products[0]?.productName ?? '—'}</p>
+				</div>
+				<div class="bg-card rounded-lg border p-3 text-center">
+					<p class="text-muted-foreground text-xs">明日の天気</p>
+					<p class="text-sm font-semibold">{getWeatherLabel(tf.weather)}</p>
+				</div>
+			</div>
+		{/if}
+
+		<!-- タブ行 -->
 		{#if forecastData}
-			<!-- 明日の売上予測 -->
+			<div class="border-border flex flex-wrap gap-1 border-b pb-1" role="tablist">
+				<Button
+					variant={activeTab === 'tomorrow' ? 'default' : 'ghost'}
+					onclick={() => activeTab = 'tomorrow'}
+					class="relative"
+					role="tab"
+					aria-selected={activeTab === 'tomorrow'}
+				>
+					明日の予測
+					{#if (forecastData.tomorrowForecast?.ingredientWarnings.length ?? 0) > 0}
+						<span class="ml-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-xs text-white">
+							{forecastData.tomorrowForecast?.ingredientWarnings.length}
+						</span>
+					{/if}
+				</Button>
+				<Button
+					variant={activeTab === 'period' ? 'default' : 'ghost'}
+					onclick={() => activeTab = 'period'}
+					role="tab"
+					aria-selected={activeTab === 'period'}
+				>
+					期間予測
+				</Button>
+				<Button
+					variant={activeTab === 'factors' ? 'default' : 'ghost'}
+					onclick={() => activeTab = 'factors'}
+					role="tab"
+					aria-selected={activeTab === 'factors'}
+				>
+					影響係数
+				</Button>
+			</div>
+		{/if}
+
+		<!-- 明日の予測タブ -->
+		{#if activeTab === 'tomorrow' && forecastData}
 			{#if forecastData.tomorrowForecast}
 				{@const tf = forecastData.tomorrowForecast}
+				{@const tomorrowDayFactor = (forecastData.dayOfWeekAnalysis.factors as Record<number,number>)[tf.dayOfWeek] ?? 1}
+				{@const tomorrowWeatherFactor = forecastData.weatherAnalysis.factors[tf.weather ?? 'other'] ?? 1}
+				{@const top3ByRevenue = [...tf.products].sort((a, b) => b.estimatedRevenue - a.estimatedRevenue).slice(0, 3)}
+				{@const top3ByQty = tf.products.slice(0, 3)}
+				{@const tomorrowProductNames = new Set(tf.products.map(p => p.productName))}
+				{@const confidenceCounts = {
+					high: forecastData.productForecasts.filter(p => tomorrowProductNames.has(p.productName) && p.confidence === 'high').length,
+					medium: forecastData.productForecasts.filter(p => tomorrowProductNames.has(p.productName) && p.confidence === 'medium').length,
+					low: forecastData.productForecasts.filter(p => tomorrowProductNames.has(p.productName) && p.confidence === 'low').length
+				}}
 				<Card class="border-primary/30 bg-primary/5 dark:bg-primary/10">
 					<CardHeader>
+						<!-- A. ヘッダー行 -->
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-2">
 								<Zap class="text-primary h-5 w-5" />
@@ -262,29 +328,52 @@
 						</div>
 					</CardHeader>
 					<CardContent>
-						<!-- 合計サマリー -->
-						<div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-							<div class="bg-background rounded-lg border p-3 text-center">
-								<p class="text-muted-foreground text-xs">予測販売数</p>
-								<p class="text-2xl font-bold">{tf.totalPredictedQuantity}<span class="text-muted-foreground text-sm font-normal">個</span></p>
-							</div>
-							{#if tf.totalEstimatedRevenue > 0}
-								<div class="bg-background rounded-lg border p-3 text-center">
-									<p class="text-muted-foreground text-xs">推計売上</p>
-									<p class="text-2xl font-bold">{formatRevenue(tf.totalEstimatedRevenue)}</p>
-								</div>
+						<!-- B. 係数説明行 -->
+						<p class="text-muted-foreground mb-4 text-sm">
+							{getDayOfWeekName(tf.dayOfWeek)}曜日のため通常比
+							<span class={tomorrowDayFactor >= 1 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+								{tomorrowDayFactor >= 1 ? '+' : ''}{((tomorrowDayFactor - 1) * 100).toFixed(0)}%
+							</span>
+							{#if tf.weather && tf.weather !== 'other'}
+								、{getWeatherLabel(tf.weather)}のため通常比
+								<span class={tomorrowWeatherFactor >= 1 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+									{tomorrowWeatherFactor >= 1 ? '+' : ''}{((tomorrowWeatherFactor - 1) * 100).toFixed(0)}%
+								</span>
 							{/if}
-							<div class="bg-background rounded-lg border p-3 text-center">
-								<p class="text-muted-foreground text-xs">商品種類</p>
-								<p class="text-2xl font-bold">{tf.products.length}<span class="text-muted-foreground text-sm font-normal">種</span></p>
+							で予測
+						</p>
+
+						<!-- C. 2カラム商品ランキング -->
+						<div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+							<!-- 販売数TOP3 -->
+							<div>
+								<h4 class="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">販売数 TOP3</h4>
+								{#each top3ByQty as product, i}
+									<div class="flex items-center justify-between py-1.5">
+										<span class="text-muted-foreground w-5 text-sm">#{i + 1}</span>
+										<span class="flex-1 truncate text-sm">{product.productName}</span>
+										<span class="font-semibold">{product.predictedQuantity}個</span>
+									</div>
+								{/each}
+							</div>
+							<!-- 売上推計TOP3 -->
+							<div>
+								<h4 class="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">売上推計 TOP3</h4>
+								{#each top3ByRevenue as product, i}
+									<div class="flex items-center justify-between py-1.5">
+										<span class="text-muted-foreground w-5 text-sm">#{i + 1}</span>
+										<span class="flex-1 truncate text-sm">{product.productName}</span>
+										<span class="font-semibold">{product.estimatedRevenue > 0 ? formatRevenue(product.estimatedRevenue) : `${product.predictedQuantity}個`}</span>
+									</div>
+								{/each}
 							</div>
 						</div>
 
-						<!-- 商品別予測（上位10件） -->
+						<!-- D. 全商品バーチャート -->
 						<div class="mb-4">
 							<h4 class="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">商品別予測数量</h4>
 							<div class="space-y-1.5">
-								{#each tf.products.slice(0, 10) as product}
+								{#each tf.products as product}
 									{@const maxQty = tf.products[0]?.predictedQuantity ?? 1}
 									<div class="flex items-center gap-2">
 										<span class="w-32 shrink-0 truncate text-sm" title={product.productName}>
@@ -305,7 +394,15 @@
 							</div>
 						</div>
 
-						<!-- 原材料警告 -->
+						<!-- E. 信頼度チップ -->
+						<div class="mb-4 flex items-center gap-2 text-xs">
+							<span class="text-muted-foreground">予測信頼度:</span>
+							<span class="rounded-full bg-green-100 px-2 py-0.5 text-green-700 dark:bg-green-900/20 dark:text-green-400">高 {confidenceCounts.high}件</span>
+							<span class="rounded-full bg-yellow-100 px-2 py-0.5 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400">中 {confidenceCounts.medium}件</span>
+							<span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-400">低 {confidenceCounts.low}件</span>
+						</div>
+
+						<!-- F. 原材料警告 -->
 						{#if tf.ingredientWarnings.length > 0}
 							<div>
 								<h4 class="mb-2 text-xs font-medium uppercase tracking-wide text-orange-600 dark:text-orange-400">
@@ -327,13 +424,17 @@
 							</div>
 						{/if}
 
+						<!-- G. フッター注記 -->
 						<p class="text-muted-foreground mt-3 text-xs">
 							※ 過去の販売実績と曜日・天候係数から推計。実際の売上と異なる場合があります。
 						</p>
 					</CardContent>
 				</Card>
 			{/if}
+		{/if}
 
+		<!-- 期間予測タブ -->
+		{#if activeTab === 'period' && forecastData}
 			<!-- 発注推奨リスト -->
 			<Card>
 				<CardHeader>
@@ -462,8 +563,10 @@
 					</div>
 				</CardContent>
 			</Card>
+		{/if}
 
-			<!-- 影響要因分析 -->
+		<!-- 影響係数タブ -->
+		{#if activeTab === 'factors' && forecastData}
 			<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 				<!-- 曜日別影響 -->
 				<Card>
@@ -559,7 +662,12 @@
 					</CardContent>
 				</Card>
 			</div>
-		{:else}
+		{/if}
+
+		</div><!-- /dimming wrapper -->
+
+		<!-- ローディング表示 -->
+		{#if !forecastData}
 			<Card>
 				<CardContent class="text-muted-foreground py-12 text-center">
 					<p>予測を計算しています...</p>
