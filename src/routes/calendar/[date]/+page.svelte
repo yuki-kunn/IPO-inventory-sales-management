@@ -163,7 +163,7 @@
 	<div class="mx-auto max-w-7xl space-y-6 p-4 sm:space-y-8 sm:p-6 md:p-8">
 		<!-- ヘッダー -->
 		<div
-			class="border-border ml-14 flex flex-col gap-4 border-b pb-4 sm:ml-0 sm:flex-row sm:items-center sm:justify-between sm:pb-6"
+			class="border-border flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between sm:pb-6"
 		>
 			<div class="flex items-center gap-2 sm:gap-4">
 				<Button

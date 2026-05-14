@@ -18,24 +18,24 @@
 	}: Props = $props();
 
 	const variantClasses = {
-		default: 'bg-primary text-primary-foreground hover:opacity-90 transition-opacity',
-		destructive: 'bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity',
-		outline: 'border border-border bg-transparent hover:bg-accent transition-colors',
-		secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors',
-		ghost: 'hover:bg-accent hover:text-accent-foreground transition-colors',
-		link: 'text-primary underline-offset-4 hover:underline'
+		default: 'bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all duration-150',
+		destructive: 'bg-destructive text-destructive-foreground hover:opacity-90 active:scale-95 transition-all duration-150',
+		outline: 'border border-border bg-transparent hover:bg-accent active:scale-95 transition-all duration-150',
+		secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 active:scale-95 transition-all duration-150',
+		ghost: 'hover:bg-accent hover:text-accent-foreground active:scale-95 transition-all duration-150',
+		link: 'text-primary underline-offset-4 hover:underline active:scale-95 transition-all duration-150'
 	};
 
 	const sizeClasses = {
 		default: 'h-10 px-4 py-2',
-		sm: 'h-9 rounded-md px-3',
-		lg: 'h-11 rounded-md px-8',
+		sm: 'h-9 rounded-lg px-3',
+		lg: 'h-11 rounded-lg px-8',
 		icon: 'h-10 w-10'
 	};
 </script>
 
 <button
-	class="focus-visible:ring-primary focus-visible:ring-offset-background inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 {variantClasses[
+	class="focus-visible:ring-primary focus-visible:ring-offset-background inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium whitespace-nowrap focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 disabled:active:scale-100 {variantClasses[
 		variant
 	]} {sizeClasses[size]} {className}"
 	{...rest}
