@@ -49,5 +49,7 @@
 	{#if isAuthenticated}
 		<Navigation />
 	{/if}
-	<slot />
+	<main class="min-h-screen {isAuthenticated ? 'sm:pl-16 lg:pl-64 pb-16 sm:pb-0' : ''}">
+		<slot />
+	</main>
 {/if}

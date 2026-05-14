@@ -10,7 +10,7 @@
 </script>
 
 <div
-	class="border-border bg-card text-card-foreground rounded-md border transition-colors {className}"
+	class="border-border bg-card text-card-foreground rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md {className}"
 >
 	{@render children()}
 </div>
