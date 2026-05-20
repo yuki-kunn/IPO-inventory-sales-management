@@ -9,6 +9,8 @@
 	import { dailySales } from '$lib/stores/dailySales.api';
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import type { SalesProcessResult } from '$lib/types';
+	import { recipes } from '$lib/stores/recipes.firestore';
+	import { get } from 'svelte/store';
 
 	let fileInput: HTMLInputElement;
 	let folderInput: HTMLInputElement;
@@ -36,21 +38,18 @@
 
 			if (result.success && result.salesData.length > 0) {
 
-				// レシピに基づいて原材料在庫を減算（新規アップロードなので処理済み商品リストは空）
+				// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
+				await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
+
+				// レシピが未ロードなら待機
+				if (get(recipes).length === 0) {
+					await recipes.refresh();
+				}
+
+				// 在庫減算・未登録判定
 				const processResult = await processSalesData(result.salesData, result.salesDate, []);
 
-				// 日別売上として保存（未登録商品数も含める）
-				await dailySales.addOrUpdate(
-					result.salesDate,
-					result.salesData,
-					processResult.totalUnregistered,
-					result.customerInfo
-				);
-
-				// 処理済み商品リストを作成
 				const processedProductNames = processResult.processedProducts.map((p) => p.productName);
-
-				// 処理済みとしてマーク
 				await dailySales.markAsProcessed(
 					result.salesDate,
 					processResult.totalUnregistered,
@@ -108,13 +107,16 @@
 				uploadStatus = result;
 
 				if (result.success && result.salesData.length > 0) {
+					// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
+					await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
+
+					// レシピが未ロードなら待機
+					if (get(recipes).length === 0) {
+						await recipes.refresh();
+					}
+
+					// 在庫減算・未登録判定
 					processResult = await processSalesData(result.salesData, result.salesDate, []);
-					await dailySales.addOrUpdate(
-						result.salesDate,
-						result.salesData,
-						processResult.totalUnregistered,
-						result.customerInfo
-					);
 
 					const processedProductNames = processResult.processedProducts.map((p) => p.productName);
 					await dailySales.markAsProcessed(
