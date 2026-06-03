@@ -54,18 +54,73 @@ export const GET: RequestHandler = async ({ url }) => {
 		const conditionCode = condition?.code || 1000;
 
 		// WeatherAPI.comのコードを独自の天候タイプに変換
+		// 参照: https://www.weatherapi.com/docs/weather_conditions.json
 		let weather: 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'other' = 'other';
 
-		if (conditionCode === 1000) {
-			weather = 'sunny'; // 晴れ
-		} else if ([1003, 1006, 1009].includes(conditionCode)) {
-			weather = 'cloudy'; // 曇り
-		} else if (conditionCode >= 1063 && conditionCode <= 1201) {
-			weather = 'rainy'; // 雨
-		} else if (conditionCode >= 1204 && conditionCode <= 1282) {
-			weather = 'snowy'; // 雪
+		// 晴れ: Clear/Sunny
+		const SUNNY_CODES = [1000];
+
+		// 曇り: Partly cloudy / Cloudy / Overcast / Mist / Fog / Thundery possible
+		const CLOUDY_CODES = [1003, 1006, 1009, 1030, 1087, 1135, 1147];
+
+		// 雨: 霧雨・雨・にわか雨・凍雨・雷雨（雪を含まないもの）
+		const RAINY_CODES = [
+			1063, // Patchy rain possible
+			1072, // Patchy freezing drizzle possible
+			1150, // Patchy light drizzle
+			1153, // Light drizzle
+			1168, // Freezing drizzle
+			1171, // Heavy freezing drizzle
+			1180, // Patchy light rain
+			1183, // Light rain
+			1186, // Moderate rain at times
+			1189, // Moderate rain
+			1192, // Heavy rain at times
+			1195, // Heavy rain
+			1198, // Light freezing rain
+			1201, // Moderate or heavy freezing rain
+			1240, // Light rain shower
+			1243, // Moderate or heavy rain shower
+			1246, // Torrential rain shower
+			1273, // Patchy light rain with thunder
+			1276  // Moderate or heavy rain with thunder
+		];
+
+		// 雪: 雪・みぞれ・霙・氷粒・雷雪
+		const SNOWY_CODES = [
+			1066, // Patchy snow possible
+			1069, // Patchy sleet possible
+			1114, // Blowing snow
+			1117, // Blizzard
+			1204, // Light sleet
+			1207, // Moderate or heavy sleet
+			1210, // Patchy light snow
+			1213, // Light snow
+			1216, // Patchy moderate snow
+			1219, // Moderate snow
+			1222, // Patchy heavy snow
+			1225, // Heavy snow
+			1237, // Ice pellets
+			1249, // Light sleet showers
+			1252, // Moderate or heavy sleet showers
+			1255, // Light snow showers
+			1258, // Moderate or heavy snow showers
+			1261, // Light showers of ice pellets
+			1264, // Moderate or heavy showers of ice pellets
+			1279, // Patchy light snow with thunder
+			1282  // Moderate or heavy snow with thunder
+		];
+
+		if (SUNNY_CODES.includes(conditionCode)) {
+			weather = 'sunny';
+		} else if (CLOUDY_CODES.includes(conditionCode)) {
+			weather = 'cloudy';
+		} else if (RAINY_CODES.includes(conditionCode)) {
+			weather = 'rainy';
+		} else if (SNOWY_CODES.includes(conditionCode)) {
+			weather = 'snowy';
 		} else {
-			weather = 'other'; // その他
+			weather = 'other';
 		}
 
 		return json({
