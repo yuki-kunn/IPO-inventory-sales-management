@@ -17,6 +17,13 @@
 	import { DollarSign, Package, ShoppingCart } from 'lucide-svelte';
 	import { getWeatherLabel } from '$lib/utils/weatherFormatter';
 	import { formatCurrency, formatDate } from '$lib/utils/formatters';
+	import { goto } from '$app/navigation';
+	import SalesScatterPlot from '$lib/components/SalesScatterPlot.svelte';
+	import {
+		calculateWeekdayStats,
+		getWeekday,
+		WEEKDAY_LABELS
+	} from '$lib/utils/salesAnalytics';
 
 	let isDarkMode = $state(false);
 	let allSalesData = $state<DailySales[]>([]);
@@ -28,6 +35,28 @@
 
 	// 天候フィルタ
 	let weatherFilter = $state<WeatherType | 'all'>('all');
+
+	// しきい値（散布図／ピックアップで共有）
+	let lowerThreshold = $state(20000); // 下限額（円）
+	let upperThreshold = $state(80000); // 上限額（円）
+
+	// 期間内データ（date昇順）
+	const periodDays = $derived(
+		allSalesData
+			.filter((ds) => ds.date >= startDate && ds.date <= endDate)
+			.slice()
+			.sort((a, b) => a.date.localeCompare(b.date))
+	);
+
+	// 曜日別統計（7要素）
+	const weekdayStats = $derived(calculateWeekdayStats(periodDays));
+
+	// 曜日別平均の最大値（横棒バーの正規化用）
+	const maxWeekdayAvg = $derived(Math.max(...weekdayStats.map((w) => w.avg), 1));
+
+	// 閾値で抽出された日
+	const belowDays = $derived(periodDays.filter((d) => d.totalSales < lowerThreshold));
+	const aboveDays = $derived(periodDays.filter((d) => d.totalSales > upperThreshold));
 
 	// 集計結果
 	let periodStats = $state({
@@ -575,6 +604,222 @@
 				</CardContent>
 			</Card>
 		{/if}
+
+		<!-- 曜日別売上統計 -->
+		<Card>
+			<CardHeader>
+				<CardTitle class="flex items-center gap-2">
+					<CalendarIcon class="h-5 w-5" />
+					曜日別売上
+				</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div class="overflow-x-auto">
+					<table class="w-full">
+						<thead>
+							<tr class="border-border border-b">
+								<th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium uppercase"
+									>曜日</th
+								>
+								<th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium uppercase"
+									>平均</th
+								>
+								<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+									>中央値</th
+								>
+								<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+									>最高</th
+								>
+								<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+									>最低</th
+								>
+								<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+									>日数</th
+								>
+							</tr>
+						</thead>
+						<tbody>
+							{#each weekdayStats as w}
+								<tr class="border-border hover:bg-muted/50 border-b transition-colors">
+									<td class="px-4 py-3">
+										<span
+											class="font-medium {w.weekday === 0
+												? 'text-red-500'
+												: w.weekday === 6
+													? 'text-blue-500'
+													: ''}"
+										>
+											{w.label}
+										</span>
+									</td>
+									<td class="px-4 py-3">
+										{#if w.count > 0}
+											<div class="flex items-center gap-2">
+												<div class="bg-muted h-2 w-24 overflow-hidden rounded-full sm:w-32">
+													<div
+														class="bg-primary h-full transition-all"
+														style="width: {(w.avg / maxWeekdayAvg) * 100}%"
+													></div>
+												</div>
+												<span class="text-sm font-medium whitespace-nowrap"
+													>{formatCurrency(w.avg)}</span
+												>
+											</div>
+										{:else}
+											<span class="text-muted-foreground text-sm">—</span>
+										{/if}
+									</td>
+									<td class="px-4 py-3 text-right text-sm">
+										{w.count > 0 ? formatCurrency(w.median) : '—'}
+									</td>
+									<td class="px-4 py-3 text-right text-sm">
+										{w.count > 0 ? formatCurrency(w.max) : '—'}
+									</td>
+									<td class="px-4 py-3 text-right text-sm">
+										{w.count > 0 ? formatCurrency(w.min) : '—'}
+									</td>
+									<td class="px-4 py-3 text-right text-sm">{w.count}日</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</CardContent>
+		</Card>
+
+		<!-- しきい値ピックアップ -->
+		<Card>
+			<CardHeader>
+				<CardTitle class="flex items-center gap-2">
+					<TrendingUp class="h-5 w-5" />
+					しきい値で日を抽出
+				</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<label class="flex flex-col gap-1">
+						<span class="text-muted-foreground text-xs font-medium">下限（この額未満を抽出）</span>
+						<input
+							type="number"
+							min="0"
+							value={lowerThreshold}
+							oninput={(e) => {
+								const v = e.currentTarget.valueAsNumber;
+								lowerThreshold = Number.isFinite(v) ? Math.max(0, v) : 0;
+							}}
+							class="border-border bg-background w-full rounded border px-3 py-2 text-sm"
+						/>
+					</label>
+					<label class="flex flex-col gap-1">
+						<span class="text-muted-foreground text-xs font-medium">上限（この額超を抽出）</span>
+						<input
+							type="number"
+							min="0"
+							value={upperThreshold}
+							oninput={(e) => {
+								const v = e.currentTarget.valueAsNumber;
+								upperThreshold = Number.isFinite(v) ? Math.max(0, v) : 0;
+							}}
+							class="border-border bg-background w-full rounded border px-3 py-2 text-sm"
+						/>
+					</label>
+				</div>
+
+				{#if lowerThreshold >= upperThreshold}
+					<p class="mt-3 rounded-md bg-yellow-500/10 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-400">
+						⚠️ 下限が上限以上に設定されています。同じ日が両方のリストに表示される場合があります。
+					</p>
+				{/if}
+
+				<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+					<!-- 下限未満（赤系） -->
+					<div>
+						<h4 class="mb-3 text-sm font-semibold text-red-600 dark:text-red-400">
+							下限 {formatCurrency(lowerThreshold)} 未満の日（{belowDays.length}件）
+						</h4>
+						{#if belowDays.length === 0}
+							<div class="text-muted-foreground py-6 text-center text-sm">
+								該当する日はありません
+							</div>
+						{:else}
+							<div class="space-y-2">
+								{#each belowDays as d}
+									<button
+										type="button"
+										onclick={() => goto(`/calendar/${d.date}`)}
+										class="border-border hover:bg-muted/50 flex w-full items-center justify-between gap-3 rounded-lg border border-l-4 border-l-red-500 px-3 py-2 text-left transition-colors"
+									>
+										<div class="flex items-center gap-2">
+											<span class="text-sm font-medium">{formatDate(d.date)}</span>
+											<span class="text-muted-foreground text-xs"
+												>({WEEKDAY_LABELS[getWeekday(d.date)]})</span
+											>
+											{#if d.weather}
+												<WeatherIcon weather={d.weather} class="h-4 w-4" />
+											{/if}
+										</div>
+										<span class="text-sm font-semibold whitespace-nowrap"
+											>{formatCurrency(d.totalSales)}</span
+										>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					<!-- 上限超（緑系） -->
+					<div>
+						<h4 class="mb-3 text-sm font-semibold text-green-600 dark:text-green-400">
+							上限 {formatCurrency(upperThreshold)} 超の日（{aboveDays.length}件）
+						</h4>
+						{#if aboveDays.length === 0}
+							<div class="text-muted-foreground py-6 text-center text-sm">
+								該当する日はありません
+							</div>
+						{:else}
+							<div class="space-y-2">
+								{#each aboveDays as d}
+									<button
+										type="button"
+										onclick={() => goto(`/calendar/${d.date}`)}
+										class="border-border hover:bg-muted/50 flex w-full items-center justify-between gap-3 rounded-lg border border-l-4 border-l-green-500 px-3 py-2 text-left transition-colors"
+									>
+										<div class="flex items-center gap-2">
+											<span class="text-sm font-medium">{formatDate(d.date)}</span>
+											<span class="text-muted-foreground text-xs"
+												>({WEEKDAY_LABELS[getWeekday(d.date)]})</span
+											>
+											{#if d.weather}
+												<WeatherIcon weather={d.weather} class="h-4 w-4" />
+											{/if}
+										</div>
+										<span class="text-sm font-semibold whitespace-nowrap"
+											>{formatCurrency(d.totalSales)}</span
+										>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+			</CardContent>
+		</Card>
+
+		<!-- 売上散布図 -->
+		<Card>
+			<CardHeader>
+				<CardTitle class="flex items-center gap-2">
+					<BarChart3 class="h-5 w-5" />
+					売上散布図（閾値ドラッグ）
+				</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<p class="text-muted-foreground mb-4 text-sm">
+					点は各日の売上。曜日ごとに色分け。青/赤の線をドラッグすると閾値が変わり、上のリストに反映されます。
+				</p>
+				<SalesScatterPlot days={periodDays} bind:lowerThreshold bind:upperThreshold />
+			</CardContent>
+		</Card>
 
 		<!-- カテゴリ別統計 -->
 		{#if categoryStats.length > 0}
