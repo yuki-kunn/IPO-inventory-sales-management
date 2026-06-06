@@ -3,13 +3,13 @@
 	import CardContent from './ui/CardContent.svelte';
 	import CardHeader from './ui/CardHeader.svelte';
 	import CardTitle from './ui/CardTitle.svelte';
-	import type { Component } from 'svelte';
+	import type { ComponentType } from 'svelte';
 
 	interface Props {
 		title: string;
 		value: string | number;
 		description: string;
-		icon: Component;
+		icon: ComponentType;
 		iconColor?: string;
 	}
 
