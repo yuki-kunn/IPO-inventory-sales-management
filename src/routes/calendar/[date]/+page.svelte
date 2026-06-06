@@ -25,6 +25,7 @@
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import { fetchWeatherForDate } from '$lib/utils/weatherService';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import type { DailySales, WeatherType } from '$lib/types';
 	import { DollarSign, TrendingUp, Package } from 'lucide-svelte';
@@ -46,6 +47,12 @@
 			salesDate = $page.params.date || '';
 			loadData();
 		});
+	}
+
+	// 遷移元に応じて戻り先を切り替え（?from=analytics なら分析ページへ）
+	function goBack() {
+		const from = $page.url.searchParams.get('from');
+		goto(from === 'analytics' ? '/analytics' : '/calendar');
 	}
 
 	async function loadData() {
@@ -169,7 +176,7 @@
 				<Button
 					variant="ghost"
 					size="icon"
-					onclick={() => (window.location.href = '/calendar')}
+					onclick={goBack}
 					class="touch-manipulation"
 				>
 					<ArrowLeft class="h-5 w-5" />

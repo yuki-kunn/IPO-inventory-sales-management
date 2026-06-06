@@ -746,7 +746,7 @@
 								{#each belowDays as d}
 									<button
 										type="button"
-										onclick={() => goto(`/calendar/${d.date}`)}
+										onclick={() => goto(`/calendar/${d.date}?from=analytics`)}
 										class="border-border hover:bg-muted/50 flex w-full items-center justify-between gap-3 rounded-lg border border-l-4 border-l-red-500 px-3 py-2 text-left transition-colors"
 									>
 										<div class="flex items-center gap-2">
@@ -781,7 +781,7 @@
 								{#each aboveDays as d}
 									<button
 										type="button"
-										onclick={() => goto(`/calendar/${d.date}`)}
+										onclick={() => goto(`/calendar/${d.date}?from=analytics`)}
 										class="border-border hover:bg-muted/50 flex w-full items-center justify-between gap-3 rounded-lg border border-l-4 border-l-green-500 px-3 py-2 text-left transition-colors"
 									>
 										<div class="flex items-center gap-2">
