@@ -25,6 +25,7 @@
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import { fetchWeatherForDate } from '$lib/utils/weatherService';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import type { DailySales, WeatherType } from '$lib/types';
 	import { DollarSign, TrendingUp, Package } from 'lucide-svelte';
@@ -46,6 +47,12 @@
 			salesDate = $page.params.date || '';
 			loadData();
 		});
+	}
+
+	// 遷移元に応じて戻り先を切り替え（?from=analytics なら分析ページへ）
+	function goBack() {
+		const from = $page.url.searchParams.get('from');
+		goto(from === 'analytics' ? '/analytics' : '/calendar');
 	}
 
 	async function loadData() {
@@ -169,7 +176,7 @@
 				<Button
 					variant="ghost"
 					size="icon"
-					onclick={() => (window.location.href = '/calendar')}
+					onclick={goBack}
 					class="touch-manipulation"
 				>
 					<ArrowLeft class="h-5 w-5" />
@@ -220,7 +227,7 @@
 							<Cloud class="h-5 w-5" />
 							天候情報
 						</span>
-						{#if dailyData.weather && dailyData.weather !== ''}
+						{#if dailyData.weather && (dailyData.weather as string) !== ''}
 							<div class="flex items-center gap-2">
 								<WeatherIcon weather={dailyData.weather} class="h-6 w-6" />
 								<span class="text-muted-foreground text-sm font-normal">
@@ -239,7 +246,7 @@
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					{#if !dailyData.weather || dailyData.weather === ''}
+					{#if !dailyData.weather || (dailyData.weather as string) === ''}
 						<p class="text-muted-foreground mb-4 text-sm">
 							この日の天候情報がまだ設定されていません。
 						</p>

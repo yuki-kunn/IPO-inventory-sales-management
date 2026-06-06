@@ -7,6 +7,8 @@
 	import { auth } from '$lib/stores/auth';
 	import Navigation from '$lib/components/Navigation.svelte';
 
+	let { children } = $props();
+
 	let isAuthenticated = $state(false);
 	let currentPath = $state('');
 
@@ -50,6 +52,6 @@
 		<Navigation />
 	{/if}
 	<main class="min-h-screen {isAuthenticated ? 'sm:pl-16 lg:pl-64 pb-16 sm:pb-0' : ''}">
-		<slot />
+		{@render children()}
 	</main>
 {/if}

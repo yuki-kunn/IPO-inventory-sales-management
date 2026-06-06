@@ -137,7 +137,9 @@ export const GET: RequestHandler = async () => {
 					name: name,
 					stockQuantity: 0,
 					unit: '',
-					minStockLevel: 0
+					minStockLevel: 0,
+					createdAt: new Date().toISOString(),
+					updatedAt: new Date().toISOString()
 				};
 				ingredientsMapById.set(page.id, ingredient);
 			}

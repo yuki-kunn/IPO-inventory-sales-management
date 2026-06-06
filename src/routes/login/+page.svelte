@@ -57,6 +57,7 @@
 					<label for="password" class="mb-2 block text-sm font-medium">
 						パスワード
 					</label>
+					<!-- svelte-ignore a11y_autofocus -->
 					<input
 						id="password"
 						type="password"
