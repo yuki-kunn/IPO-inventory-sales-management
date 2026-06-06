@@ -80,6 +80,11 @@
 			// 処理済みとしてマーク
 			await dailySales.markAsProcessed(date, result.totalUnregistered, allProcessedProducts);
 
+			// 新しくレシピ処理できた商品を未登録リストから削除
+			for (const productName of newlyProcessedProducts) {
+				await unregisteredProducts.remove(productName);
+			}
+
 			alert(
 				`${date}の売上データを再計算しました。\n\n` +
 					`今回処理: ${result.totalProcessed}件\n` +

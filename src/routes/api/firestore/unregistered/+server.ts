@@ -25,10 +25,16 @@ export const GET: RequestHandler = async () => {
 			.orderBy('lastSeenAt', 'desc')
 			.get();
 
-		const products: UnregisteredProduct[] = snapshot.docs.map((doc) => ({
-			...(doc.data() as UnregisteredProduct),
-			productName: doc.id
-		}));
+		const products: UnregisteredProduct[] = snapshot.docs.map((doc) => {
+			const data = doc.data() as any;
+			return {
+				productName: doc.id,
+				soldQuantity: data.soldQuantity ?? data.totalQuantity ?? 0,
+				salesDates: data.salesDates ?? (data.dates?.map((d: any) => String(d.date ?? d)) ?? []),
+				firstSeenAt: data.firstSeenAt ?? '',
+				lastSeenAt: data.lastSeenAt ?? ''
+			};
+		});
 
 		return json({ products });
 	} catch (error: any) {
@@ -69,22 +75,22 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			if (doc.exists) {
 				// 既存の商品を更新
-				const existingData = doc.data() as UnregisteredProduct;
+				const data = doc.data() as any;
+				const existingSalesDates: string[] = data.salesDates ?? (data.dates?.map((d: any) => String(d.date ?? d)) ?? []);
 				await docRef.update({
-					totalQuantity: (existingData.totalQuantity || 0) + quantity,
-					lastSeenAt: new Date().toISOString(),
-					dates: [...(existingData.dates || []), { date, quantity }]
+					soldQuantity: (data.soldQuantity ?? data.totalQuantity ?? 0) + quantity,
+					salesDates: Array.from(new Set([...existingSalesDates, date])),
+					lastSeenAt: new Date().toISOString()
 				});
 			} else {
 				// 新規商品を追加
-				const newProduct: UnregisteredProduct = {
+				await docRef.set({
 					productName,
-					totalQuantity: quantity,
+					soldQuantity: quantity,
+					salesDates: [date],
 					firstSeenAt: new Date().toISOString(),
-					lastSeenAt: new Date().toISOString(),
-					dates: [{ date, quantity }]
-				};
-				await docRef.set(newProduct);
+					lastSeenAt: new Date().toISOString()
+				} as any);
 			}
 
 			return json({ success: true, message: '未登録商品を保存しました' });
