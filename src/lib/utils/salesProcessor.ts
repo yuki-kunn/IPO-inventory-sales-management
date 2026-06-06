@@ -91,12 +91,6 @@ export async function processSalesData(
 		} else {
 			// レシピが未登録の場合
 			const dateToUse = salesDate || sale.salesDate || new Date().toISOString().split('T')[0];
-				'[processSalesData] 未登録商品を追加:',
-				sale.productName,
-				'販売数:',
-				sale.soldQuantity,
-				'日付:',
-				dateToUse
 			await unregisteredProducts.addOrUpdate(sale.productName, sale.soldQuantity, dateToUse);
 
 			const unregisteredProduct = {
