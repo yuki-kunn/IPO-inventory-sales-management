@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Upload, Folder, File } from 'lucide-svelte';
+	import { Upload, Folder, File as FileIcon } from 'lucide-svelte';
 	import Button from './ui/Button.svelte';
 	import Card from './ui/Card.svelte';
 	import CardContent from './ui/CardContent.svelte';
@@ -206,7 +206,7 @@
 
 			<div class="grid grid-cols-2 gap-2">
 				<Button onclick={triggerFileInput} disabled={uploading} variant="outline">
-					<File class="mr-2 h-4 w-4" />
+					<FileIcon class="mr-2 h-4 w-4" />
 					{uploading ? '処理中...' : 'ファイル選択'}
 				</Button>
 				<Button onclick={triggerFolderInput} disabled={uploading}>

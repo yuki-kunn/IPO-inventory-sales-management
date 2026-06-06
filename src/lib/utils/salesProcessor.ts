@@ -97,7 +97,8 @@ export async function processSalesData(
 				productName: sale.productName,
 				soldQuantity: sale.soldQuantity,
 				firstSeenAt: new Date().toISOString(),
-				lastSeenAt: new Date().toISOString()
+				lastSeenAt: new Date().toISOString(),
+				salesDates: [dateToUse]
 			};
 
 			result.unregisteredProducts.push(unregisteredProduct);

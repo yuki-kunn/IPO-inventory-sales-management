@@ -32,15 +32,15 @@ export const GET: RequestHandler = async ({ url }) => {
 			}
 
 			const data = doc.data() as DailySales;
-			return json({ dailySale: { id: doc.id, ...data } });
+			return json({ dailySale: { ...data, id: doc.id } });
 		}
 
 		// すべての売上を取得
 		const snapshot = await adminDb.collection('dailySales').orderBy('date', 'desc').get();
 
 		const dailySales: DailySales[] = snapshot.docs.map((doc) => ({
-			id: doc.id,
-			...(doc.data() as DailySales)
+			...(doc.data() as DailySales),
+			id: doc.id
 		}));
 
 		return json({ dailySales });

@@ -227,7 +227,7 @@
 							<Cloud class="h-5 w-5" />
 							天候情報
 						</span>
-						{#if dailyData.weather && dailyData.weather !== ''}
+						{#if dailyData.weather && (dailyData.weather as string) !== ''}
 							<div class="flex items-center gap-2">
 								<WeatherIcon weather={dailyData.weather} class="h-6 w-6" />
 								<span class="text-muted-foreground text-sm font-normal">
@@ -246,7 +246,7 @@
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
-					{#if !dailyData.weather || dailyData.weather === ''}
+					{#if !dailyData.weather || (dailyData.weather as string) === ''}
 						<p class="text-muted-foreground mb-4 text-sm">
 							この日の天候情報がまだ設定されていません。
 						</p>
