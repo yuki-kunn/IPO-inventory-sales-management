@@ -61,7 +61,7 @@ AirREGIの売上データを活用し、原材料在庫を自動で減算。天�
 | **ビルドツール** | Vite 5 |
 | **スタイリング** | Tailwind CSS |
 | **アイコン** | Lucide Svelte |
-| **外部API** | Open-Meteo API（天候データ） |
+| **外部API** | WeatherAPI.com（天候データ）、Notion API（原材料・レシピのマスタ） |
 | **デプロイ** | Vercel |
 
 ### コード品質
@@ -112,6 +112,14 @@ PUBLIC_FIREBASE_APP_ID=your_app_id
 # Firebase Admin SDK（本番環境のみ）
 FIREBASE_ADMIN_PROJECT_ID=your_project_id
 FIREBASE_ADMIN_SERVICE_ACCOUNT_KEY=your_base64_encoded_key
+
+# WeatherAPI.com（天候データ連携。https://www.weatherapi.com/ で取得）
+WEATHER_API_KEY=your_weatherapi_key
+
+# Notion API（原材料・レシピのマスタ取得）
+NOTION_API_KEY=your_notion_integration_token
+NOTION_DATABASE_ID=your_notion_database_id
+NOTION_DATABASE_ID_IMPORT=your_notion_import_database_id
 ```
 
 ### 3. 開発サーバーの起動
