@@ -13,6 +13,7 @@
 	import PeriodSelector from '$lib/components/PeriodSelector.svelte';
 	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
+	import { loadAnalyticsSettings, saveAnalyticsSettings } from '$lib/stores/analyticsSettings';
 	import type { DailySales, SalesData, WeatherType, CustomerInfo } from '$lib/types';
 	import { DollarSign, Package, ShoppingCart } from 'lucide-svelte';
 	import { getWeatherLabel } from '$lib/utils/weatherFormatter';
@@ -39,6 +40,9 @@
 	// しきい値（散布図／ピックアップで共有）
 	let lowerThreshold = $state(20000); // 下限額（円）
 	let upperThreshold = $state(80000); // 上限額（円）
+
+	// localStorage への保存ガード（onMount での復元完了後のみ保存）
+	let initialized = $state(false);
 
 	// 期間内データ（date昇順）
 	const periodDays = $derived(
@@ -144,15 +148,39 @@
 	});
 
 	onMount(() => {
-		// デフォルトで過去30日間を設定
-		const end = new Date();
-		const start = new Date();
-		start.setDate(start.getDate() - 30);
-
-		endDate = end.toISOString().split('T')[0];
-		startDate = start.toISOString().split('T')[0];
-
+		const saved = loadAnalyticsSettings();
+		if (saved) {
+			// 保存済み設定を復元
+			startDate = saved.startDate;
+			endDate = saved.endDate;
+			lowerThreshold = saved.lowerThreshold;
+			upperThreshold = saved.upperThreshold;
+			weatherFilter = saved.weatherFilter;
+		} else {
+			// 初回はデフォルトで過去30日間
+			const end = new Date();
+			const start = new Date();
+			start.setDate(start.getDate() - 30);
+			endDate = end.toISOString().split('T')[0];
+			startDate = start.toISOString().split('T')[0];
+		}
+		initialized = true;
 		calculatePeriodStats();
+	});
+
+	// 設定変更を localStorage に永続化（初期化完了後のみ）
+	$effect(() => {
+		// 5値すべてを参照して依存登録（順序重要：if より前に読む）
+		const settings = {
+			startDate,
+			endDate,
+			lowerThreshold,
+			upperThreshold,
+			weatherFilter
+		};
+		if (initialized) {
+			saveAnalyticsSettings(settings);
+		}
 	});
 
 	function toggleDarkMode() {
