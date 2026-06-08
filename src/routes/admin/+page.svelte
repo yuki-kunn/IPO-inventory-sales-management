@@ -8,7 +8,9 @@
 		RefreshCw,
 		CheckCircle2,
 		XCircle,
-		MinusCircle
+		MinusCircle,
+		Cookie,
+		KeyRound
 	} from 'lucide-svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import CardContent from '$lib/components/ui/CardContent.svelte';
@@ -45,6 +47,18 @@
 	let scheduledTime = $state('09:00');
 	let enabled = $state(true);
 
+	// Cookie登録用
+	interface CookieMeta {
+		count: number;
+		updatedAt: string | null;
+		names: string[];
+	}
+	let cookieMeta = $state<CookieMeta | null>(null);
+	let cookieInput = $state('');
+	let cookieSaving = $state(false);
+	let cookieMessage = $state('');
+	let showCookieHelp = $state(false);
+
 	async function loadConfig() {
 		const res = await fetch('/api/automation/config');
 		const data = await res.json();
@@ -61,9 +75,44 @@
 		logs = data.logs ?? [];
 	}
 
+	async function loadCookieMeta() {
+		const res = await fetch('/api/automation/cookies');
+		const data = await res.json();
+		cookieMeta = data.cookieMeta ?? null;
+	}
+
+	async function saveCookies() {
+		if (!cookieInput.trim()) {
+			cookieMessage = 'Cookieを貼り付けてください';
+			return;
+		}
+		cookieSaving = true;
+		cookieMessage = '';
+		try {
+			const res = await fetch('/api/automation/cookies', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ cookies: cookieInput })
+			});
+			const data = await res.json();
+			if (data.success) {
+				cookieMessage = `${data.count}個のCookieを保存しました`;
+				cookieInput = '';
+				await loadCookieMeta();
+			} else {
+				cookieMessage = data.message || '保存に失敗しました';
+			}
+		} catch (e) {
+			cookieMessage = '保存中にエラーが発生しました';
+		} finally {
+			cookieSaving = false;
+			setTimeout(() => (cookieMessage = ''), 4000);
+		}
+	}
+
 	async function refresh() {
 		loading = true;
-		await Promise.all([loadConfig(), loadLogs()]);
+		await Promise.all([loadConfig(), loadLogs(), loadCookieMeta()]);
 		loading = false;
 	}
 
@@ -264,6 +313,107 @@
 						</Button>
 						{#if saveMessage}
 							<span class="text-sm text-blue-600 dark:text-blue-400">{saveMessage}</span>
+						{/if}
+					</div>
+				</div>
+			</CardContent>
+		</Card>
+
+		<!-- AirREGI Cookie登録 -->
+		<Card>
+			<CardHeader>
+				<CardTitle class="flex items-center gap-2">
+					<KeyRound class="h-5 w-5" />
+					AirREGI ログインCookie
+				</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div class="space-y-4">
+					<!-- 現在の状態 -->
+					<div class="flex items-center gap-3 rounded-md border p-3">
+						<Cookie
+							class="h-5 w-5 {cookieMeta && cookieMeta.count > 0
+								? 'text-green-500'
+								: 'text-gray-400'}"
+						/>
+						<div class="flex-1">
+							{#if cookieMeta && cookieMeta.count > 0}
+								<p class="text-sm font-medium">登録済み（{cookieMeta.count}個）</p>
+								<p class="text-muted-foreground text-xs">
+									最終更新: {cookieMeta.updatedAt
+										? new Date(cookieMeta.updatedAt).toLocaleString('ja-JP', {
+												timeZone: 'Asia/Tokyo'
+											})
+										: '-'}
+								</p>
+							{:else}
+								<p class="text-sm font-medium text-yellow-600 dark:text-yellow-400">未登録</p>
+								<p class="text-muted-foreground text-xs">
+									自動取込にはCookieの登録が必要です
+								</p>
+							{/if}
+						</div>
+					</div>
+
+					<!-- 取得手順 -->
+					<button
+						type="button"
+						class="text-xs text-blue-600 underline dark:text-blue-400"
+						onclick={() => (showCookieHelp = !showCookieHelp)}
+					>
+						{showCookieHelp ? '手順を隠す' : 'Cookieの取得手順を表示'}
+					</button>
+					{#if showCookieHelp}
+						<div
+							class="space-y-1 rounded-md border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-muted-foreground"
+						>
+							<p class="font-medium text-foreground">取得手順（Windowsのブラウザで）:</p>
+							<ol class="ml-4 list-decimal space-y-1">
+								<li>
+									<a
+										href="https://airregi.jp/CLP/view/salesListByMenu/"
+										target="_blank"
+										rel="noopener"
+										class="text-blue-600 underline dark:text-blue-400"
+									>
+										AirREGIの売上ページ
+									</a>
+									を開いてログインする
+								</li>
+								<li><kbd class="rounded border px-1">F12</kbd> で開発者ツールを開く</li>
+								<li>「Application」(アプリケーション) タブ → 左の「Cookies」を開く</li>
+								<li>
+									<code>https://airregi.jp</code> と
+									<code>https://connect.airregi.jp</code> の両方の行を全選択してコピー
+								</li>
+								<li>下の欄に貼り付けて「保存」</li>
+							</ol>
+							<p class="mt-2">
+								※ Cookie-Editor等の拡張機能でエクスポートしたJSON配列も貼り付け可能です。
+							</p>
+						</div>
+					{/if}
+
+					<!-- 入力欄 -->
+					<div>
+						<label for="cookieInput" class="mb-2 block text-sm font-medium">
+							Cookieを貼り付け
+						</label>
+						<textarea
+							id="cookieInput"
+							bind:value={cookieInput}
+							rows="5"
+							placeholder="DevToolsのCookie表、またはCookie-Editor等のJSONを貼り付け"
+							class="border-input bg-background w-full rounded-md border px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-slate-500"
+						></textarea>
+					</div>
+
+					<div class="flex flex-wrap items-center gap-3">
+						<Button onclick={saveCookies} disabled={cookieSaving}>
+							{cookieSaving ? '保存中...' : 'Cookieを保存'}
+						</Button>
+						{#if cookieMessage}
+							<span class="text-sm text-blue-600 dark:text-blue-400">{cookieMessage}</span>
 						{/if}
 					</div>
 				</div>
