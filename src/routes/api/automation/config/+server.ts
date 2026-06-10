@@ -15,7 +15,8 @@ const DEFAULT_CONFIG = {
 	scheduledTime: '09:00',
 	timezone: 'Asia/Tokyo',
 	lastRunDate: '',
-	forceRun: false
+	forceRun: false,
+	runDate: ''
 };
 
 // 設定取得
@@ -75,6 +76,16 @@ export const POST: RequestHandler = async ({ request }) => {
 				);
 			}
 			allowed.scheduledTime = body.scheduledTime;
+		}
+		// 指定日実行の対象日（"YYYY-MM-DD" または空文字でクリア）
+		if (typeof body.runDate === 'string') {
+			if (body.runDate !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(body.runDate)) {
+				return json(
+					{ success: false, message: '日付は YYYY-MM-DD 形式で入力してください' },
+					{ status: 400 }
+				);
+			}
+			allowed.runDate = body.runDate;
 		}
 
 		if (Object.keys(allowed).length === 0) {
