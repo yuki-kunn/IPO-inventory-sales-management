@@ -25,6 +25,7 @@
 		timezone: string;
 		lastRunDate: string;
 		forceRun: boolean;
+		runDate: string;
 	}
 
 	interface LogEntry {
@@ -143,13 +144,14 @@
 	}
 
 	async function triggerManualRun() {
+		// 当日を即時実行（runDateを空にして当日対象を保証）
 		saving = true;
 		saveMessage = '';
 		try {
 			const res = await fetch('/api/automation/config', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ forceRun: true })
+				body: JSON.stringify({ forceRun: true, runDate: '' })
 			});
 			const data = await res.json();
 			saveMessage = data.success
@@ -161,6 +163,36 @@
 		} finally {
 			saving = false;
 			setTimeout(() => (saveMessage = ''), 5000);
+		}
+	}
+
+	// 指定日実行用
+	let runDateInput = $state('');
+
+	async function triggerDateRun() {
+		if (!runDateInput) {
+			saveMessage = '日付を選択してください';
+			setTimeout(() => (saveMessage = ''), 3000);
+			return;
+		}
+		saving = true;
+		saveMessage = '';
+		try {
+			const res = await fetch('/api/automation/config', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ forceRun: true, runDate: runDateInput })
+			});
+			const data = await res.json();
+			saveMessage = data.success
+				? `${runDateInput} のデータを次回チェック時（最大10分以内）に取得します`
+				: data.message || '失敗しました';
+			await loadConfig();
+		} catch (e) {
+			saveMessage = 'エラーが発生しました';
+		} finally {
+			saving = false;
+			setTimeout(() => (saveMessage = ''), 6000);
 		}
 	}
 
@@ -309,11 +341,31 @@
 						</Button>
 						<Button variant="outline" onclick={triggerManualRun} disabled={saving}>
 							<PlayCircle class="mr-2 h-4 w-4" />
-							今すぐ実行
+							今すぐ実行（当日）
 						</Button>
 						{#if saveMessage}
 							<span class="text-sm text-blue-600 dark:text-blue-400">{saveMessage}</span>
 						{/if}
+					</div>
+
+					<!-- 指定日を即時実行 -->
+					<div class="space-y-2 rounded-md border border-dashed p-4">
+						<p class="text-sm font-medium">指定日のデータを取得</p>
+						<p class="text-muted-foreground text-xs">
+							過去の取りこぼしや再取得に。選んだ日付のバリエーション別売上と天候を取り込みます。
+						</p>
+						<div class="flex flex-wrap items-center gap-3 pt-1">
+							<input
+								type="date"
+								bind:value={runDateInput}
+								max={config?.lastRunDate || undefined}
+								class="border-input bg-background rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-500"
+							/>
+							<Button variant="outline" onclick={triggerDateRun} disabled={saving}>
+								<PlayCircle class="mr-2 h-4 w-4" />
+								この日付で実行
+							</Button>
+						</div>
 					</div>
 				</div>
 			</CardContent>
