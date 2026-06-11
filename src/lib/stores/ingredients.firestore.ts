@@ -31,17 +31,38 @@ function createIngredientsNotionStore() {
 		}
 	}
 
-	// 定期的にデータを取得（30秒ごと）
+	// 定期的にデータを取得
+	// Firestore無料枠のクォータ消費を抑えるため、間隔を5分に延長し、
+	// タブが非表示(放置)の間はポーリングを停止する。
+	const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5分
+
+	function startPolling() {
+		if (!browser || refreshInterval) return;
+		refreshInterval = setInterval(() => {
+			if (!document.hidden) fetchIngredients();
+		}, REFRESH_INTERVAL_MS);
+	}
+
+	function stopPolling() {
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+			refreshInterval = null;
+		}
+	}
+
 	function initAutoRefresh() {
 		if (!browser) return;
-
-		// 初回読み込み
-		fetchIngredients();
-
-		// 30秒ごとに更新
-		refreshInterval = setInterval(() => {
-			fetchIngredients();
-		}, 30000);
+		fetchIngredients(); // 初回読み込み
+		startPolling();
+		// タブの表示/非表示でポーリングを制御（放置タブの読み取りを防ぐ）
+		document.addEventListener('visibilitychange', () => {
+			if (document.hidden) {
+				stopPolling();
+			} else {
+				fetchIngredients(); // 復帰時に一度だけ最新化
+				startPolling();
+			}
+		});
 	}
 
 	// ブラウザ環境で自動更新を開始

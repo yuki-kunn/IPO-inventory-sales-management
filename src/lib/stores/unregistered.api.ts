@@ -35,16 +35,36 @@ function createUnregisteredProductsApiStore() {
 	}
 
 	// 自動更新を開始（30秒ごと）
+	// Firestore無料枠のクォータ消費を抑えるため、間隔を5分に延長し、
+	// タブが非表示(放置)の間はポーリングを停止する。
+	const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5分
+
+	function startPolling() {
+		if (!browser || refreshInterval) return;
+		refreshInterval = setInterval(() => {
+			if (!document.hidden) fetchUnregisteredProducts();
+		}, REFRESH_INTERVAL_MS);
+	}
+
+	function stopPolling() {
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+			refreshInterval = null;
+		}
+	}
+
 	function initAutoRefresh() {
 		if (!browser) return;
-
-		// 初回読み込み
-		fetchUnregisteredProducts();
-
-		// 30秒ごとに更新
-		refreshInterval = setInterval(() => {
-			fetchUnregisteredProducts();
-		}, 30000);
+		fetchUnregisteredProducts(); // 初回読み込み
+		startPolling();
+		document.addEventListener('visibilitychange', () => {
+			if (document.hidden) {
+				stopPolling();
+			} else {
+				fetchUnregisteredProducts();
+				startPolling();
+			}
+		});
 	}
 
 	// ブラウザ環境で自動更新を開始
