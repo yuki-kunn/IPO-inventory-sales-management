@@ -41,10 +41,9 @@
 				// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
 				await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
 
-				// レシピが未ロードなら待機
-				if (get(recipes).length === 0) {
-					await recipes.refresh();
-				}
+				// レシピを必ずロード（Notion API経由・非同期）。
+				// 未ロードのまま処理すると全商品が未登録扱いになり在庫が減らないため。
+				await recipes.refresh();
 
 				// 在庫減算・未登録判定
 				const processResult = await processSalesData(result.salesData, result.salesDate, []);
@@ -110,20 +109,25 @@
 					// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
 					await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
 
-					// レシピが未ロードなら待機
+					// レシピを必ずロード（Notion API経由・非同期）。
+					// 自動アップロード等でレシピ未ロードのまま処理すると全商品が
+					// 「未登録」扱いになり在庫が減らないため、毎回ロード完了を待つ。
+					await recipes.refresh();
 					if (get(recipes).length === 0) {
-						await recipes.refresh();
+						// レシピが取得できない場合は在庫処理せず、処理済みフラグも立てない
+						// （inventoryProcessed=true だけ立つ不整合を防止）
+						console.warn('[SalesUploader] レシピが0件のため在庫処理をスキップ:', result.salesDate);
+					} else {
+						// 在庫減算・未登録判定
+						processResult = await processSalesData(result.salesData, result.salesDate, []);
+
+						const processedProductNames = processResult.processedProducts.map((p) => p.productName);
+						await dailySales.markAsProcessed(
+							result.salesDate,
+							processResult.totalUnregistered,
+							processedProductNames
+						);
 					}
-
-					// 在庫減算・未登録判定
-					processResult = await processSalesData(result.salesData, result.salesDate, []);
-
-					const processedProductNames = processResult.processedProducts.map((p) => p.productName);
-					await dailySales.markAsProcessed(
-						result.salesDate,
-						processResult.totalUnregistered,
-						processedProductNames
-					);
 				}
 			} else {
 				// 複数ファイルの場合は一括処理
