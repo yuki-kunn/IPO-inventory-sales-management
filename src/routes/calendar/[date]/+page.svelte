@@ -32,6 +32,20 @@
 
 	let isDarkMode = $state(false);
 	let salesDate = $state('');
+
+	// JST基準の今日（YYYY-MM-DD）
+	const todayJST = new Intl.DateTimeFormat('ja-JP', {
+		timeZone: 'Asia/Tokyo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	})
+		.format(new Date())
+		.replace(/\//g, '-');
+
+	// 売上日が未来かどうか（YYYY-MM-DD は辞書順=日付順）
+	const isFutureDate = $derived(!!salesDate && salesDate > todayJST);
+
 	let dailyData = $state<DailySales | null>(null);
 	let loading = $state(true);
 	let reprocessing = $state(false);
@@ -289,7 +303,21 @@
 			</Card>
 
 			<!-- ステータスカード -->
-			{#if dailyData.inventoryProcessed && dailyData.unregisteredCount === 0}
+			{#if isFutureDate}
+				<Card class="border-border bg-muted/30">
+					<CardHeader>
+						<CardTitle class="text-muted-foreground flex items-center gap-2">
+							<AlertCircle class="h-5 w-5" />
+							未来の日付です
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<p class="text-muted-foreground text-sm">
+							この日付の売上はまだ発生していないため、在庫反映は不要です。
+						</p>
+					</CardContent>
+				</Card>
+			{:else if dailyData.inventoryProcessed && (dailyData.unregisteredCount ?? 0) === 0}
 				<Card class="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20">
 					<CardHeader>
 						<CardTitle class="flex items-center gap-2 text-green-800 dark:text-green-200">
@@ -303,7 +331,7 @@
 						</p>
 					</CardContent>
 				</Card>
-			{:else if dailyData.unregisteredCount > 0}
+			{:else if (dailyData.unregisteredCount ?? 0) > 0}
 				<Card class="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20">
 					<CardHeader>
 						<CardTitle class="flex items-center gap-2 text-orange-800 dark:text-orange-200">
