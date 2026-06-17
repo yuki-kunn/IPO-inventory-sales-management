@@ -52,6 +52,13 @@ export async function processSalesData(
 	const currentRecipes = get(recipes);
 	const currentIngredients = get(ingredients);
 
+	if (currentRecipes.length === 0 || currentIngredients.length === 0) {
+		console.warn(
+			'[salesProcessor] レシピまたは原材料が未ロード。呼び出し元で refresh() を await してください。' +
+				` recipes=${currentRecipes.length} ingredients=${currentIngredients.length}`
+		);
+		return result;
+	}
 
 	for (const sale of salesData) {
 		// 無視する商品をスキップ
