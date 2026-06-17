@@ -46,7 +46,7 @@ function generateFastId(): string {
  * ファイル名から日付を抽出
  * 例: 商品別売上_20260413-20260413.csv → 2026-04-13
  */
-function extractDateFromFilename(filename: string): string {
+export function extractDateFromFilename(filename: string): string {
 	// パターン1: 商品別売上_YYYYMMDD-YYYYMMDD.csv
 	const match1 = filename.match(DATE_PATTERN_1);
 	if (match1) {
@@ -334,7 +334,7 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 		}
 
 		return {
-			success: errors.length === 0,
+			success: salesData.length > 0,
 			importedCount: salesData.length,
 			errors,
 			salesData,

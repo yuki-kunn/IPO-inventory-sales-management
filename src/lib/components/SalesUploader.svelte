@@ -5,7 +5,7 @@
 	import CardContent from './ui/CardContent.svelte';
 	import CardHeader from './ui/CardHeader.svelte';
 	import CardTitle from './ui/CardTitle.svelte';
-	import { parseSalesCSV, type ParsedSalesCSVResult } from '$lib/utils/salesCsv';
+	import { parseSalesCSV, extractDateFromFilename, type ParsedSalesCSVResult } from '$lib/utils/salesCsv';
 	import { dailySales } from '$lib/stores/dailySales.api';
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import type { SalesProcessResult } from '$lib/types';
@@ -24,6 +24,7 @@
 			imported: number;
 			processed: number;
 			unregistered: number;
+			warnings: number;
 		}>
 	>([]);
 
@@ -61,25 +62,28 @@
 					success: true,
 					imported: result.importedCount,
 					processed: processResult.totalProcessed,
-					unregistered: processResult.totalUnregistered
+					unregistered: processResult.totalUnregistered,
+					warnings: result.errors.length
 				};
 			}
 
 			return {
-				date: file.name,
+				date: result.salesDate,
 				success: false,
-				imported: 0,
+				imported: result.importedCount,
 				processed: 0,
-				unregistered: 0
+				unregistered: 0,
+				warnings: result.errors.length
 			};
 		} catch (error) {
 			console.error('[SalesUploader] エラー:', file.name, error);
 			return {
-				date: file.name,
+				date: extractDateFromFilename(file.name),
 				success: false,
 				imported: 0,
 				processed: 0,
-				unregistered: 0
+				unregistered: 0,
+				warnings: 0
 			};
 		}
 	}
@@ -271,6 +275,11 @@
 												>未登録: {result.unregistered}件</span
 											>
 										{/if}
+										{#if result.warnings > 0}
+											<span class="text-orange-600 dark:text-orange-400"
+												>スキップ: {result.warnings}行</span
+											>
+										{/if}
 									</div>
 								{/if}
 							</div>
@@ -320,7 +329,7 @@
 				>
 					{#if uploadStatus.success}
 						<p class="mb-2 text-sm font-medium text-green-600 dark:text-green-400">
-							{uploadStatus.importedCount}件の売上データをインポートしました
+							{uploadStatus.importedCount}件の売上データをインポートしました{#if uploadStatus.errors.length > 0}（{uploadStatus.errors.length}行スキップ）{/if}
 						</p>
 						{#if processResult}
 							<div class="mt-3 border-t border-green-500/20 pt-3">
@@ -371,6 +380,18 @@
 										</Button>
 									</div>
 								{/if}
+							</div>
+						{/if}
+						{#if uploadStatus.errors.length > 0}
+							<div class="mt-3 border-t border-yellow-500/20 pt-3">
+								<p class="mb-1 text-xs font-medium text-yellow-600 dark:text-yellow-400">
+									スキップされた行: {uploadStatus.errors.length}件
+								</p>
+								<ul class="max-h-32 space-y-0.5 overflow-y-auto text-xs text-yellow-700 dark:text-yellow-300">
+									{#each uploadStatus.errors as error}
+										<li>行 {error.row}: {error.field} - {error.message}</li>
+									{/each}
+								</ul>
 							</div>
 						{/if}
 					{:else}
