@@ -10,6 +10,7 @@
 	import { processSalesData } from '$lib/utils/salesProcessor';
 	import type { SalesProcessResult } from '$lib/types';
 	import { recipes } from '$lib/stores/recipes.firestore';
+	import { ingredients } from '$lib/stores/ingredients.firestore';
 	import { get } from 'svelte/store';
 
 	let fileInput: HTMLInputElement;
@@ -38,13 +39,25 @@
 			const result = await parseSalesCSV(file);
 
 			if (result.success && result.salesData.length > 0) {
-
 				// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
 				await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
 
-				// レシピが未ロードなら待機
+				// レシピ・原材料を必ずロード（Notion API経由・非同期）。
+				// 未ロードのまま処理すると全商品が未登録扱いになり在庫が減らないため。
+				await Promise.all([recipes.refresh(), ingredients.refresh()]);
+
 				if (get(recipes).length === 0) {
-					await recipes.refresh();
+					// レシピが取得できない場合は在庫処理せず、処理済みフラグも立てない
+					// （inventoryProcessed=true だけ立つ不整合を防止）
+					console.warn('[SalesUploader] レシピが0件のため在庫処理をスキップ:', result.salesDate);
+					return {
+						date: result.salesDate,
+						success: false,
+						imported: result.importedCount,
+						processed: 0,
+						unregistered: 0,
+						warnings: result.errors.length
+					};
 				}
 
 				// 在庫減算・未登録判定
@@ -114,20 +127,25 @@
 					// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
 					await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
 
-					// レシピが未ロードなら待機
+					// レシピ・原材料を必ずロード（Notion API経由・非同期）。
+					// 自動アップロード等で未ロードのまま処理すると全商品が
+					// 「未登録」扱いになり在庫が減らないため、毎回ロード完了を待つ。
+					await Promise.all([recipes.refresh(), ingredients.refresh()]);
 					if (get(recipes).length === 0) {
-						await recipes.refresh();
+						// レシピが取得できない場合は在庫処理せず、処理済みフラグも立てない
+						// （inventoryProcessed=true だけ立つ不整合を防止）
+						console.warn('[SalesUploader] レシピが0件のため在庫処理をスキップ:', result.salesDate);
+					} else {
+						// 在庫減算・未登録判定
+						processResult = await processSalesData(result.salesData, result.salesDate, []);
+
+						const processedProductNames = processResult.processedProducts.map((p) => p.productName);
+						await dailySales.markAsProcessed(
+							result.salesDate,
+							processResult.totalUnregistered,
+							processedProductNames
+						);
 					}
-
-					// 在庫減算・未登録判定
-					processResult = await processSalesData(result.salesData, result.salesDate, []);
-
-					const processedProductNames = processResult.processedProducts.map((p) => p.productName);
-					await dailySales.markAsProcessed(
-						result.salesDate,
-						processResult.totalUnregistered,
-						processedProductNames
-					);
 				}
 			} else {
 				// 複数ファイルの場合は一括処理

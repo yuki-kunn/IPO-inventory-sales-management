@@ -7,6 +7,7 @@
 		Calendar,
 		BarChart2,
 		TrendingUp,
+		Settings,
 		LogOut
 	} from 'lucide-svelte';
 	import { page } from '$app/stores';
@@ -26,7 +27,8 @@
 		{ href: '/unregistered', label: '未登録商品', icon: AlertCircle },
 		{ href: '/calendar', label: '売上カレンダー', icon: Calendar },
 		{ href: '/analytics', label: '売上分析', icon: BarChart2 },
-		{ href: '/forecast', label: '販売予測', icon: TrendingUp }
+		{ href: '/forecast', label: '販売予測', icon: TrendingUp },
+		{ href: '/admin', label: '自動化管理', icon: Settings }
 	];
 
 	// ボトムナビに表示する主要5項目

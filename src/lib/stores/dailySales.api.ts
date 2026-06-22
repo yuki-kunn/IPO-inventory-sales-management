@@ -35,16 +35,36 @@ function createDailySalesApiStore() {
 	}
 
 	// 自動更新を開始（30秒ごと）
+	// Firestore無料枠のクォータ消費を抑えるため、間隔を5分に延長し、
+	// タブが非表示(放置)の間はポーリングを停止する。
+	const REFRESH_INTERVAL_MS = 60 * 60 * 1000; // 1時間（Firestore無料枠の消費を最小化）
+
+	function startPolling() {
+		if (!browser || refreshInterval) return;
+		refreshInterval = setInterval(() => {
+			if (!document.hidden) fetchDailySales();
+		}, REFRESH_INTERVAL_MS);
+	}
+
+	function stopPolling() {
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+			refreshInterval = null;
+		}
+	}
+
 	function initAutoRefresh() {
 		if (!browser) return;
-
-		// 初回読み込み
-		fetchDailySales();
-
-		// 30秒ごとに更新
-		refreshInterval = setInterval(() => {
-			fetchDailySales();
-		}, 30000);
+		fetchDailySales(); // 初回読み込み
+		startPolling();
+		document.addEventListener('visibilitychange', () => {
+			if (document.hidden) {
+				stopPolling();
+			} else {
+				fetchDailySales();
+				startPolling();
+			}
+		});
 	}
 
 	// ブラウザ環境で自動更新を開始
