@@ -95,16 +95,27 @@ export async function reflectInventory(date: string): Promise<ReflectResult> {
 	const newlyProcessed: string[] = [];
 	const unregisteredToWrite: { name: string; qty: number }[] = [];
 
+	// その日の未登録商品の総数（売上全体から毎回決定的に再カウントする）。
+	// 累積ではなく絶対値で算出するため、再アップロード時の addOrUpdate による
+	// unregisteredCount リセットや、再実行（ワーカーの再計算）に影響されない。
+	const unregisteredNames = new Set<string>();
+
 	for (const sale of sales) {
 		if (IGNORED_PRODUCTS.includes(sale.productName)) continue;
+
+		const recipe = findRecipe(sale.productName, recipes);
+		const hasRecipe = !!(recipe && recipe.ingredients.length > 0);
+
+		// 未登録判定は既処理かどうかに関わらず行い、その日の総数に反映する
+		if (!hasRecipe) unregisteredNames.add(sale.productName);
+
+		// 在庫減算・Firestore記録の副作用は冪等性のため既処理商品をスキップ
 		if (alreadyProcessed.includes(sale.productName)) {
 			result.alreadyProcessedCount++;
 			continue;
 		}
 
-		const recipe = findRecipe(sale.productName, recipes);
-
-		if (recipe && recipe.ingredients.length > 0) {
+		if (recipe && hasRecipe) {
 			const reduced: { ingredientName: string; reducedQuantity: number }[] = [];
 			for (const ri of recipe.ingredients) {
 				const amt = ri.quantity * sale.soldQuantity;
@@ -151,7 +162,8 @@ export async function reflectInventory(date: string): Promise<ReflectResult> {
 		inventoryProcessed: true,
 		isProcessed: true,
 		processedAt: now,
-		unregisteredCount: (data.unregisteredCount ?? 0) + result.totalUnregistered,
+		// その日の未登録商品の総数（決定的に再カウントした絶対値）
+		unregisteredCount: unregisteredNames.size,
 		processedProducts: mergedProcessed,
 		updatedAt: now
 	});
