@@ -22,7 +22,6 @@
 	import WeatherSelector from '$lib/components/WeatherSelector.svelte';
 	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
-	import { processSalesData } from '$lib/utils/salesProcessor';
 	import { fetchWeatherForDate } from '$lib/utils/weatherService';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -104,32 +103,19 @@
 
 		try {
 			reprocessing = true;
-			console.log('[CalendarDate] 再計算開始:', salesDate);
-
-			// すでに処理済みの商品リストを取得
-			const alreadyProcessed = dailyData.processedProducts || [];
-			console.log('[CalendarDate] すでに処理済みの商品:', alreadyProcessed);
-
-			// 売上データを再処理（処理済み商品をスキップ）
-			const result = await processSalesData(dailyData.sales, salesDate, alreadyProcessed);
-
-			console.log('[CalendarDate] 再計算完了:', result);
-
-			// 新しく処理された商品を既存のリストに追加
-			const newlyProcessedProducts = result.processedProducts.map((p) => p.productName);
-			const allProcessedProducts = [...new Set([...alreadyProcessed, ...newlyProcessedProducts])];
-
-			// 処理済みとしてマーク
-			await dailySales.markAsProcessed(salesDate, result.totalUnregistered, allProcessedProducts);
-
+			const res = await fetch('/api/inventory/reflect', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ date: salesDate })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok || !data.success) throw new Error(data?.error || data?.message || '在庫反映に失敗しました');
+			const result = data.result;
 			alert(
 				`${salesDate}の売上データを再計算しました。\n\n` +
 					`今回処理: ${result.totalProcessed}件\n` +
-					`未登録: ${result.totalUnregistered}件\n` +
-					`総処理済み: ${allProcessedProducts.length}件`
-
+					`未登録: ${result.totalUnregistered}件`
 			);
-			// データをリロード
 			await loadData();
 		} catch (error) {
 			console.error('[CalendarDate] 再計算エラー:', error);

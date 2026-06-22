@@ -7,16 +7,31 @@
 	import CardTitle from './ui/CardTitle.svelte';
 	import { parseSalesCSV, extractDateFromFilename, type ParsedSalesCSVResult } from '$lib/utils/salesCsv';
 	import { dailySales } from '$lib/stores/dailySales.api';
-	import { processSalesData } from '$lib/utils/salesProcessor';
 	import type { SalesProcessResult } from '$lib/types';
-	import { recipes } from '$lib/stores/recipes.firestore';
-	import { ingredients } from '$lib/stores/ingredients.firestore';
-	import { get } from 'svelte/store';
+
+	async function reflectInventory(date: string) {
+		const res = await fetch('/api/inventory/reflect', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ date })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok || !data.success) {
+			throw new Error(data?.error || data?.message || '在庫反映に失敗しました');
+		}
+		return data.result as {
+			totalProcessed: number;
+			totalUnregistered: number;
+			processedProducts: any[];
+			unregisteredProducts: any[];
+		};
+	}
 
 	let fileInput: HTMLInputElement;
 	let folderInput: HTMLInputElement;
 	let uploadStatus: ParsedSalesCSVResult | null = $state(null);
 	let processResult: SalesProcessResult | null = $state(null);
+	let reflectFailed = $state(false);
 	let uploading = $state(false);
 	let batchResults = $state<
 		Array<{
@@ -39,43 +54,16 @@
 			const result = await parseSalesCSV(file);
 
 			if (result.success && result.salesData.length > 0) {
-				// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
+				// カレンダーに先に保存（在庫反映が失敗してもカレンダーデータは確保）
 				await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
 
-				// レシピ・原材料を必ずロード（Notion API経由・非同期）。
-				// 未ロードのまま処理すると全商品が未登録扱いになり在庫が減らないため。
-				await Promise.all([recipes.refresh(), ingredients.refresh()]);
-
-				if (get(recipes).length === 0) {
-					// レシピが取得できない場合は在庫処理せず、処理済みフラグも立てない
-					// （inventoryProcessed=true だけ立つ不整合を防止）
-					console.warn('[SalesUploader] レシピが0件のため在庫処理をスキップ:', result.salesDate);
-					return {
-						date: result.salesDate,
-						success: false,
-						imported: result.importedCount,
-						processed: 0,
-						unregistered: 0,
-						warnings: result.errors.length
-					};
-				}
-
-				// 在庫減算・未登録判定
-				const processResult = await processSalesData(result.salesData, result.salesDate, []);
-
-				const processedProductNames = processResult.processedProducts.map((p) => p.productName);
-				await dailySales.markAsProcessed(
-					result.salesDate,
-					processResult.totalUnregistered,
-					processedProductNames
-				);
-
+				const reflect = await reflectInventory(result.salesDate);
 				return {
 					date: result.salesDate,
 					success: true,
 					imported: result.importedCount,
-					processed: processResult.totalProcessed,
-					unregistered: processResult.totalUnregistered,
+					processed: reflect.totalProcessed,
+					unregistered: reflect.totalUnregistered,
 					warnings: result.errors.length
 				};
 			}
@@ -109,6 +97,7 @@
 		uploading = true;
 		uploadStatus = null;
 		processResult = null;
+		reflectFailed = false;
 		batchResults = [];
 		totalFiles = files.length;
 		currentFileIndex = 0;
@@ -124,27 +113,22 @@
 				uploadStatus = result;
 
 				if (result.success && result.salesData.length > 0) {
-					// カレンダーに先に保存（processSalesDataが失敗してもカレンダーデータは確保）
+					// カレンダーに先に保存（在庫反映が失敗してもカレンダーデータは確保）
 					await dailySales.addOrUpdate(result.salesDate, result.salesData, 0, result.customerInfo);
 
-					// レシピ・原材料を必ずロード（Notion API経由・非同期）。
-					// 自動アップロード等で未ロードのまま処理すると全商品が
-					// 「未登録」扱いになり在庫が減らないため、毎回ロード完了を待つ。
-					await Promise.all([recipes.refresh(), ingredients.refresh()]);
-					if (get(recipes).length === 0) {
-						// レシピが取得できない場合は在庫処理せず、処理済みフラグも立てない
-						// （inventoryProcessed=true だけ立つ不整合を防止）
-						console.warn('[SalesUploader] レシピが0件のため在庫処理をスキップ:', result.salesDate);
-					} else {
-						// 在庫減算・未登録判定
-						processResult = await processSalesData(result.salesData, result.salesDate, []);
-
-						const processedProductNames = processResult.processedProducts.map((p) => p.productName);
-						await dailySales.markAsProcessed(
-							result.salesDate,
-							processResult.totalUnregistered,
-							processedProductNames
-						);
+					// 在庫反映は付随処理。失敗してもインポート成功表示は維持する
+					// （売上データは保存済み。後から /calendar の再計算でリカバリ可能）。
+					try {
+						const reflect = await reflectInventory(result.salesDate);
+						processResult = {
+							processedProducts: reflect.processedProducts,
+							unregisteredProducts: reflect.unregisteredProducts,
+							totalProcessed: reflect.totalProcessed,
+							totalUnregistered: reflect.totalUnregistered
+						};
+					} catch (reflectError) {
+						console.error('[SalesUploader] 在庫反映に失敗（インポートは成功）:', reflectError);
+						reflectFailed = true;
 					}
 				}
 			} else {
@@ -349,6 +333,14 @@
 						<p class="mb-2 text-sm font-medium text-green-600 dark:text-green-400">
 							{uploadStatus.importedCount}件の売上データをインポートしました{#if uploadStatus.errors.length > 0}（{uploadStatus.errors.length}行スキップ）{/if}
 						</p>
+						{#if reflectFailed}
+							<div class="mt-3 border-t border-orange-500/20 pt-3">
+								<p class="text-xs font-medium text-orange-600 dark:text-orange-400">
+									⚠ 売上データは保存しましたが、原材料在庫の自動反映に失敗しました。<br />
+									カレンダーの該当日から「再計算」で反映できます。
+								</p>
+							</div>
+						{/if}
 						{#if processResult}
 							<div class="mt-3 border-t border-green-500/20 pt-3">
 								<p class="mb-2 text-sm font-medium text-blue-600 dark:text-blue-400">
