@@ -203,7 +203,7 @@
 											<div class="text-[9px] font-medium text-red-600 sm:text-xs dark:text-red-400">
 												未{day.salesData.unregisteredCount}
 											</div>
-										{:else if day.salesData.inventoryProcessed}
+										{:else}
 											<div class="text-[10px] text-green-600 dark:text-green-400">✓</div>
 										{/if}
 									{/if}
