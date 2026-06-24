@@ -303,20 +303,6 @@
 						</p>
 					</CardContent>
 				</Card>
-			{:else if dailyData.inventoryProcessed && (dailyData.unregisteredCount ?? 0) === 0}
-				<Card class="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20">
-					<CardHeader>
-						<CardTitle class="flex items-center gap-2 text-green-800 dark:text-green-200">
-							<CheckCircle class="h-5 w-5" />
-							すべて反映済み
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p class="text-sm text-green-700 dark:text-green-300">
-							この日の売上データはすべて原材料在庫に反映されています。
-						</p>
-					</CardContent>
-				</Card>
 			{:else if (dailyData.unregisteredCount ?? 0) > 0}
 				<Card class="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20">
 					<CardHeader>
@@ -356,31 +342,17 @@
 					</CardContent>
 				</Card>
 			{:else}
-				<Card class="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20">
+				<Card class="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20">
 					<CardHeader>
-						<CardTitle class="flex items-center gap-2 text-blue-800 dark:text-blue-200">
-							<AlertCircle class="h-5 w-5" />
-							原材料在庫を反映できます
+						<CardTitle class="flex items-center gap-2 text-green-800 dark:text-green-200">
+							<CheckCircle class="h-5 w-5" />
+							すべて反映済み
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<p class="mb-4 text-sm text-blue-700 dark:text-blue-300">
-							すべての商品に原材料が登録されています。「再計算」をクリックして原材料在庫に反映してください。
+						<p class="text-sm text-green-700 dark:text-green-300">
+							この日の売上データはすべて原材料在庫に反映されています。
 						</p>
-						<Button
-							variant="outline"
-							size="sm"
-							onclick={handleReprocess}
-							disabled={reprocessing}
-							class="border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
-						>
-							{#if reprocessing}
-								<RefreshCw class="mr-2 h-4 w-4 animate-spin" />
-							{:else}
-								<RefreshCw class="mr-2 h-4 w-4" />
-							{/if}
-							再計算
-						</Button>
 					</CardContent>
 				</Card>
 			{/if}
