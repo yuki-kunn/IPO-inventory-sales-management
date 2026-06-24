@@ -1,0 +1,186 @@
+import { Client, isFullDatabase } from '@notionhq/client';
+import { env } from '$env/dynamic/private';
+import type { Ingredient } from '$lib/types';
+
+/**
+ * Notionから原材料在庫データを取得する。
+ * 設定不足・データソース不足の場合は例外を投げる。
+ */
+export async function fetchIngredientsFromNotion(): Promise<Ingredient[]> {
+	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
+		throw new Error('Notion API設定がありません');
+	}
+
+	const notion = new Client({
+		auth: env.NOTION_API_KEY,
+		timeoutMs: 60000 // 60秒のタイムアウト
+	});
+
+	// 1. データベース情報を取得してデータソースIDを特定する
+	const db = await notion.databases.retrieve({
+		database_id: env.NOTION_DATABASE_ID as string
+	});
+
+	if (!isFullDatabase(db)) {
+		throw new Error('データベース情報の詳細を取得できませんでした。権限を確認してください。');
+	}
+
+	const dataSourceId = db.data_sources?.[0]?.id;
+	if (!dataSourceId) {
+		throw new Error('データベース内に有効なデータソースが見つかりませんでした。');
+	}
+
+	// 2. 特定したデータソースに対してクエリを実行（全件取得）
+	const response = await notion.dataSources.query({
+		data_source_id: dataSourceId
+	});
+
+	// プロパティ取得ヘルパー（完全一致または部分一致）
+	const getProp = (page: any, ...keywords: string[]) => {
+		for (const keyword of keywords) {
+			// 完全一致を優先
+			if (page.properties[keyword]) {
+				return page.properties[keyword];
+			}
+			// 部分一致
+			const key = Object.keys(page.properties).find((k) =>
+				k.toLowerCase().includes(keyword.toLowerCase())
+			);
+			if (key) {
+				return page.properties[key];
+			}
+		}
+		return null;
+	};
+
+	// プロパティから値を安全に取得（型を自動判定）
+	const getValue = (prop: any): any => {
+		if (!prop) return null;
+
+		// プロパティの型に応じて値を取得
+		if (prop.type === 'title' && prop.title) {
+			return prop.title[0]?.plain_text || null;
+		}
+		if (prop.type === 'rich_text' && prop.rich_text) {
+			return prop.rich_text[0]?.plain_text || null;
+		}
+		if (prop.type === 'number') {
+			return prop.number ?? null;
+		}
+		if (prop.type === 'select' && prop.select) {
+			return prop.select.name || null;
+		}
+
+		return null;
+	};
+
+	// データを整形
+	const ingredients: Ingredient[] = response.results.map((page: any) => {
+		// タイトルプロパティ（原材料名 or 商品名）
+		const nameProp = getProp(page, '原材料名', '商品名', 'Name', 'name');
+		const name = getValue(nameProp) || '名前なし';
+
+		// 在庫数（必須）
+		const stockProp = getProp(page, '在庫数', '在庫', '現在庫', 'Stock', 'stock');
+		const stockQuantity = getValue(stockProp) ?? 0;
+
+		// 単位
+		const unitProp = getProp(page, '単位', 'Unit', 'unit');
+		const unit = getValue(unitProp) || '';
+
+		// 最小在庫
+		const minStockProp = getProp(page, '最小在庫', '買い出し点', 'Min Stock', 'min_stock');
+		const minStockLevel = getValue(minStockProp) ?? 0;
+
+		// 仕入先
+		const supplierProp = getProp(page, '仕入先', 'Supplier', 'supplier');
+		const supplier = getValue(supplierProp) || '';
+
+		// 単価
+		const priceProp = getProp(page, '単価', '価格', 'Price', 'price');
+		const unitPrice = getValue(priceProp) ?? 0;
+
+		// 説明
+		const descProp = getProp(page, '説明', 'Description', 'description', 'メモ');
+		const description = getValue(descProp) || '';
+
+		return {
+			id: page.id,
+			name,
+			unit,
+			stockQuantity,
+			minStockLevel,
+			supplier,
+			unitPrice,
+			description,
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString()
+		};
+	});
+
+	return ingredients;
+}
+
+/**
+ * Notionの原材料在庫を更新する。
+ * 最初の対象ページから在庫数プロパティ名を特定し、並列で更新する。
+ * 在庫数プロパティが見つからない場合・更新失敗時は例外を投げる。
+ */
+export async function updateIngredientStocks(
+	updates: { id: string; newStock: number }[]
+): Promise<void> {
+	if (!updates || updates.length === 0) {
+		return;
+	}
+
+	if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
+		throw new Error('Notion API設定がありません');
+	}
+
+	const notion = new Client({
+		auth: env.NOTION_API_KEY,
+		timeoutMs: 60000
+	});
+
+	// 1. 最初の更新対象ページを取得してプロパティ名を特定
+	const firstPageId = updates[0].id;
+	const samplePage = await notion.pages.retrieve({ page_id: firstPageId });
+
+	if (!('properties' in samplePage) || !samplePage.properties) {
+		throw new Error('ページのプロパティ情報が取得できませんでした');
+	}
+
+	// 在庫数プロパティを探す（複数の候補から）
+	const stockPropertyName = Object.keys(samplePage.properties).find(
+		(key) =>
+			key === '在庫数' ||
+			key === '在庫' ||
+			key === '現在庫' ||
+			key.toLowerCase() === 'stock' ||
+			key.toLowerCase().includes('在庫')
+	);
+
+	if (!stockPropertyName) {
+		console.error('[Notion API] 利用可能なプロパティ:', Object.keys(samplePage.properties));
+		throw new Error('在庫数プロパティが見つかりません。Notionデータベースの設定を確認してください。');
+	}
+
+	// 2. 全ての更新を並列実行
+	await Promise.all(
+		updates.map(async (update) => {
+			try {
+				await notion.pages.update({
+					page_id: update.id,
+					properties: {
+						[stockPropertyName]: {
+							number: update.newStock
+						}
+					}
+				});
+			} catch (err: any) {
+				console.error(`[Notion API] ページ更新エラー (${update.id}):`, err.message);
+				throw err;
+			}
+		})
+	);
+}
