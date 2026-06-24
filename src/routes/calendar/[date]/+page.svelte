@@ -22,7 +22,6 @@
 	import WeatherSelector from '$lib/components/WeatherSelector.svelte';
 	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
-	import { processSalesData } from '$lib/utils/salesProcessor';
 	import { fetchWeatherForDate } from '$lib/utils/weatherService';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -32,6 +31,20 @@
 
 	let isDarkMode = $state(false);
 	let salesDate = $state('');
+
+	// JST基準の今日（YYYY-MM-DD）
+	const todayJST = new Intl.DateTimeFormat('ja-JP', {
+		timeZone: 'Asia/Tokyo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	})
+		.format(new Date())
+		.replace(/\//g, '-');
+
+	// 売上日が未来かどうか（YYYY-MM-DD は辞書順=日付順）
+	const isFutureDate = $derived(!!salesDate && salesDate > todayJST);
+
 	let dailyData = $state<DailySales | null>(null);
 	let loading = $state(true);
 	let reprocessing = $state(false);
@@ -90,32 +103,19 @@
 
 		try {
 			reprocessing = true;
-			console.log('[CalendarDate] 再計算開始:', salesDate);
-
-			// すでに処理済みの商品リストを取得
-			const alreadyProcessed = dailyData.processedProducts || [];
-			console.log('[CalendarDate] すでに処理済みの商品:', alreadyProcessed);
-
-			// 売上データを再処理（処理済み商品をスキップ）
-			const result = await processSalesData(dailyData.sales, salesDate, alreadyProcessed);
-
-			console.log('[CalendarDate] 再計算完了:', result);
-
-			// 新しく処理された商品を既存のリストに追加
-			const newlyProcessedProducts = result.processedProducts.map((p) => p.productName);
-			const allProcessedProducts = [...new Set([...alreadyProcessed, ...newlyProcessedProducts])];
-
-			// 処理済みとしてマーク
-			await dailySales.markAsProcessed(salesDate, result.totalUnregistered, allProcessedProducts);
-
+			const res = await fetch('/api/inventory/reflect', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ date: salesDate })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok || !data.success) throw new Error(data?.error || data?.message || '在庫反映に失敗しました');
+			const result = data.result;
 			alert(
 				`${salesDate}の売上データを再計算しました。\n\n` +
 					`今回処理: ${result.totalProcessed}件\n` +
-					`未登録: ${result.totalUnregistered}件\n` +
-					`総処理済み: ${allProcessedProducts.length}件`
-
+					`未登録: ${result.totalUnregistered}件`
 			);
-			// データをリロード
 			await loadData();
 		} catch (error) {
 			console.error('[CalendarDate] 再計算エラー:', error);
@@ -289,21 +289,21 @@
 			</Card>
 
 			<!-- ステータスカード -->
-			{#if dailyData.inventoryProcessed && dailyData.unregisteredCount === 0}
-				<Card class="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20">
+			{#if isFutureDate}
+				<Card class="border-border bg-muted/30">
 					<CardHeader>
-						<CardTitle class="flex items-center gap-2 text-green-800 dark:text-green-200">
-							<CheckCircle class="h-5 w-5" />
-							すべて反映済み
+						<CardTitle class="text-muted-foreground flex items-center gap-2">
+							<AlertCircle class="h-5 w-5" />
+							未来の日付です
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<p class="text-sm text-green-700 dark:text-green-300">
-							この日の売上データはすべて原材料在庫に反映されています。
+						<p class="text-muted-foreground text-sm">
+							この日付の売上はまだ発生していないため、在庫反映は不要です。
 						</p>
 					</CardContent>
 				</Card>
-			{:else if dailyData.unregisteredCount > 0}
+			{:else if (dailyData.unregisteredCount ?? 0) > 0}
 				<Card class="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20">
 					<CardHeader>
 						<CardTitle class="flex items-center gap-2 text-orange-800 dark:text-orange-200">
@@ -342,31 +342,17 @@
 					</CardContent>
 				</Card>
 			{:else}
-				<Card class="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20">
+				<Card class="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20">
 					<CardHeader>
-						<CardTitle class="flex items-center gap-2 text-blue-800 dark:text-blue-200">
-							<AlertCircle class="h-5 w-5" />
-							原材料在庫を反映できます
+						<CardTitle class="flex items-center gap-2 text-green-800 dark:text-green-200">
+							<CheckCircle class="h-5 w-5" />
+							すべて反映済み
 						</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<p class="mb-4 text-sm text-blue-700 dark:text-blue-300">
-							すべての商品に原材料が登録されています。「再計算」をクリックして原材料在庫に反映してください。
+						<p class="text-sm text-green-700 dark:text-green-300">
+							この日の売上データはすべて原材料在庫に反映されています。
 						</p>
-						<Button
-							variant="outline"
-							size="sm"
-							onclick={handleReprocess}
-							disabled={reprocessing}
-							class="border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300"
-						>
-							{#if reprocessing}
-								<RefreshCw class="mr-2 h-4 w-4 animate-spin" />
-							{:else}
-								<RefreshCw class="mr-2 h-4 w-4" />
-							{/if}
-							再計算
-						</Button>
 					</CardContent>
 				</Card>
 			{/if}
