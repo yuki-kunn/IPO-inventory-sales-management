@@ -27,6 +27,9 @@ const HOT_COLD_PRODUCTS = new Set([
 	'カモミールティー'
 ]);
 
+// 種別を商品名から分離した商品（種別1を「商品名(種別)」の形式で結合する）
+const VARIATION_COMBINED_PRODUCTS = new Set(['ホットサンド']);
+
 const EXCLUDE_PATTERNS = [
 	'店内',
 	'お持ち帰り',
@@ -72,6 +75,14 @@ export function extractDateFromFilename(filename: string): string {
 function normalizeProductName(productName: string, variation1: string): string {
 	// 早期リターン: variation1が空ならそのまま返す
 	if (!variation1) return productName;
+
+	// 種別結合商品（ホットサンド等）: 「商品名(種別1)」の形式で結合する。
+	// 例: 商品名「ホットサンド」+ 種別1「ハムチーズ」→「ホットサンド(ハムチーズ)」
+	// 種別はNotionメニュー名に合わせ半角括弧で囲む。
+	if (VARIATION_COMBINED_PRODUCTS.has(productName)) {
+		const variation = cleanVariation(variation1);
+		return variation ? `${productName}(${variation})` : productName;
+	}
 
 	// 高速化: 事前コンパイル済み正規表現を使用
 	const hotMatch = HOT_PATTERN.test(variation1);
