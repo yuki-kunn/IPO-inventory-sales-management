@@ -101,42 +101,42 @@ export const POST: RequestHandler = async ({ request }) => {
 			if (doc.exists) {
 				const existingData = doc.data() as any;
 
-				// 既存の商品リストとマージ
-				const existingProducts = existingData.salesData || existingData.sales || [];
-				const newProducts = salesData as SalesData[];
+				const batch = adminDb.batch();
 
-				// 商品名でユニークにする
-				const productMap = new Map<string, SalesData>();
-				[...existingProducts, ...newProducts].forEach((product: SalesData) => {
-					productMap.set(product.productName, product);
+				// 1. 旧ドキュメントを履歴としてスタッシュ（全バージョン保持）
+				const stashRef = docRef.collection('stash').doc();
+				batch.set(stashRef, {
+					...existingData,
+					stashedAt: new Date().toISOString(),
+					stashReason: 'csv-reimport-replace'
 				});
 
-				const mergedSalesData = Array.from(productMap.values());
-
-				// 集計データを再計算
-				const mergedTotalSales = mergedSalesData.reduce((sum, s) => sum + s.totalSales, 0);
-				const mergedTotalProfit = mergedSalesData.reduce((sum, s) => sum + s.grossProfit, 0);
-				const mergedTotalQuantity = mergedSalesData.reduce((sum, s) => sum + s.soldQuantity, 0);
-
-				const updateData: any = {
+				// 2. 新データで完全置き換え（マージしない）。在庫は次のreflectで再計算する。
+				//    旧reflectionDeltaをpendingRevertDeltaへ退避し、reflect時に旧反映を取り消す。
+				const replaceData: any = {
+					id: date,
 					date,
-					totalSales: mergedTotalSales,
-					totalProfit: mergedTotalProfit,
-					totalQuantity: mergedTotalQuantity,
-					productCount: mergedSalesData.length,
-					salesData: mergedSalesData,
-					sales: mergedSalesData, // 互換性のため
-					inventoryProcessed: existingData.inventoryProcessed || existingData.isProcessed || false,
-					isProcessed: existingData.inventoryProcessed || existingData.isProcessed || false,
-					unregisteredCount: unregisteredCount ?? existingData.unregisteredCount ?? 0,
+					totalSales,
+					totalProfit,
+					totalQuantity,
+					productCount,
+					salesData: salesData as SalesData[],
+					sales: salesData as SalesData[],
+					inventoryProcessed: false,
+					isProcessed: false,
+					processedAt: null,
+					processedProducts: [],
+					unregisteredCount: 0,
 					customerInfo: customerInfo ?? existingData.customerInfo ?? [],
 					weather: weather ?? existingData.weather ?? '',
-					processedProducts: existingData.processedProducts || [],
-					processedAt: existingData.processedAt || null,
+					reflectionDelta: null,
+					pendingRevertDelta: existingData.reflectionDelta ?? null,
+					createdAt: existingData.createdAt ?? new Date().toISOString(),
 					updatedAt: new Date().toISOString()
 				};
+				batch.set(docRef, replaceData);
 
-				await docRef.update(updateData);
+				await batch.commit();
 			} else {
 				// 新規作成
 				const newData: any = {
@@ -155,6 +155,8 @@ export const POST: RequestHandler = async ({ request }) => {
 					processedAt: null,
 					processedProducts: [],
 					weather: weather ?? '',
+					reflectionDelta: null,
+					pendingRevertDelta: null,
 					createdAt: new Date().toISOString(),
 					updatedAt: new Date().toISOString()
 				};

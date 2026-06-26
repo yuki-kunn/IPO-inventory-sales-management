@@ -1,4 +1,4 @@
-import type { SalesData, SalesProcessResult } from '$lib/types';
+import type { SalesData, SalesProcessResult, ReflectionDelta } from '$lib/types';
 import { adminDb, initializationError } from '$lib/server/firebase-admin';
 import { fetchRecipesFromNotion } from './notionRecipes';
 import { fetchIngredientsFromNotion, updateIngredientStocks } from './notionIngredients';
@@ -77,6 +77,13 @@ export async function reflectInventory(date: string): Promise<ReflectResult> {
 	const sales: SalesData[] = data.salesData ?? data.sales ?? [];
 	const alreadyProcessed: string[] = data.processedProducts ?? [];
 
+	// 再アップロード時に退避された旧反映差分（取り消し対象）と、これまでの累積差分
+	const pending: ReflectionDelta | null = data.pendingRevertDelta ?? null;
+	const prevDelta: ReflectionDelta = data.reflectionDelta ?? {
+		ingredientReductions: {},
+		unregistered: {}
+	};
+
 	const recipes = await fetchRecipesFromNotion();
 	const ingredients = await fetchIngredientsFromNotion();
 	if (recipes.length === 0) throw new Error('レシピが0件のため在庫反映を中止しました');
@@ -147,15 +154,49 @@ export async function reflectInventory(date: string): Promise<ReflectResult> {
 		}
 	}
 
-	// Notion在庫更新（dailySales更新より前に実行）
-	const updates = Array.from(reductionByIngredient.entries()).map(([id, total]) => ({
-		id,
-		newStock: Math.max(0, (stockMap.get(id) ?? 0) - total)
-	}));
+	// 3a. 旧反映の取り消し分をメモリ上のstockMapに畳み込む（最終的に正味の1回書き込みにする）
+	if (pending) {
+		for (const [id, amt] of Object.entries(pending.ingredientReductions)) {
+			stockMap.set(id, (stockMap.get(id) ?? 0) + amt); // 旧減算分を在庫に戻す（メモリ上）
+		}
+	}
+
+	// 3b. revert後のstockMapを基準に新データの減算を計算し、クランプ後の実減算量を記録する
+	const appliedReduction = new Map<string, number>();
+	const updates: { id: string; newStock: number }[] = [];
+	// 新データによる減算（revert後のstockMapを基準）
+	for (const [id, total] of reductionByIngredient.entries()) {
+		const base = stockMap.get(id) ?? 0;
+		const newStock = Math.max(0, base - total);
+		appliedReduction.set(id, base - newStock); // クランプ後の実減算量
+		updates.push({ id, newStock });
+	}
+	// revert対象だが新データでは減算されない原材料（戻した値をそのまま書き込む）
+	if (pending) {
+		for (const id of Object.keys(pending.ingredientReductions)) {
+			if (!reductionByIngredient.has(id)) {
+				updates.push({ id, newStock: stockMap.get(id) ?? 0 });
+			}
+		}
+	}
 	if (updates.length) await updateIngredientStocks(updates);
 
-	for (const u of unregisteredToWrite) await upsertUnregistered(u.name, u.qty, date);
+	// 3d. reflectionDeltaを累積する（置き換えではなく加算）。
+	//     prevDelta + 今回の実減算量 + 今回の新規未登録数量。
+	const nextDelta: ReflectionDelta = {
+		ingredientReductions: { ...prevDelta.ingredientReductions },
+		unregistered: { ...prevDelta.unregistered }
+	};
+	for (const [id, amt] of appliedReduction.entries()) {
+		nextDelta.ingredientReductions[id] = (nextDelta.ingredientReductions[id] ?? 0) + amt;
+	}
+	for (const u of unregisteredToWrite) {
+		nextDelta.unregistered[u.name] = (nextDelta.unregistered[u.name] ?? 0) + u.qty;
+	}
 
+	// 冪等性マーカー（pendingRevertDelta消費・processedProducts）はNotion在庫更新の
+	// 直後に確定する。未登録コレクションの書き込み（副次的・決定的に再カウント可能）を
+	// この後に回すことで、クラッシュ時に pendingRevertDelta が二重適用される窓を最小化する。
 	const mergedProcessed = Array.from(new Set([...alreadyProcessed, ...newlyProcessed]));
 	const now = new Date().toISOString();
 	await adminDb.collection('dailySales').doc(date).update({
@@ -165,8 +206,36 @@ export async function reflectInventory(date: string): Promise<ReflectResult> {
 		// その日の未登録商品の総数（決定的に再カウントした絶対値）
 		unregisteredCount: unregisteredNames.size,
 		processedProducts: mergedProcessed,
+		reflectionDelta: nextDelta,
+		pendingRevertDelta: null, // 消費済み
 		updatedAt: now
 	});
+
+	// 3c. 未登録商品の取り消し（この日付の旧寄与分を差し引く）。その後に新規upsertを行う。
+	//     冪等性マーカー確定後に実行する副次処理。
+	if (pending) {
+		for (const [name, qty] of Object.entries(pending.unregistered)) {
+			const ref = adminDb.collection('unregisteredProducts').doc(name);
+			const d = await ref.get();
+			if (!d.exists) continue;
+			const v = d.data() as any;
+			const newSold = (v.soldQuantity ?? v.totalQuantity ?? 0) - qty;
+			const salesDates: string[] = (
+				v.salesDates ?? (v.dates?.map((x: any) => String(x.date ?? x)) ?? [])
+			).filter((x: string) => x !== date);
+			if (newSold <= 0 && salesDates.length === 0) {
+				await ref.delete();
+			} else {
+				await ref.update({
+					soldQuantity: Math.max(0, newSold),
+					salesDates,
+					lastSeenAt: new Date().toISOString()
+				});
+			}
+		}
+	}
+
+	for (const u of unregisteredToWrite) await upsertUnregistered(u.name, u.qty, date);
 
 	return result;
 }

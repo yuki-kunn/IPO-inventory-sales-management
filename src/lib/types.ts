@@ -89,6 +89,12 @@ export interface CustomerInfo {
 // 天候タイプ
 export type WeatherType = 'sunny' | 'cloudy' | 'rainy' | 'snowy' | 'other' | '';
 
+// 在庫反映の差分記録（再アップロード時の取り消し用）
+export interface ReflectionDelta {
+	ingredientReductions: Record<string, number>; // ingredientId -> total ACTUAL (clamped) stock reduced for this date, accumulated
+	unregistered: Record<string, number>; // productName -> qty contributed to unregisteredProducts for this date, accumulated
+}
+
 // 日別売上集計
 export interface DailySales {
 	id: string; // YYYY-MM-DD形式の日付をIDとして使用
@@ -103,6 +109,8 @@ export interface DailySales {
 	unregisteredCount: number; // 未登録商品数
 	processedProducts: string[]; // 在庫減算済みの商品名リスト
 	weather?: WeatherType; // 天候情報
+	reflectionDelta?: ReflectionDelta | null; // 今回までに反映した在庫減算・未登録の累積差分
+	pendingRevertDelta?: ReflectionDelta | null; // 次回reflect時に取り消すべき旧反映差分
 	createdAt: string;
 	updatedAt: string;
 }
