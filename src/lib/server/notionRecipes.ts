@@ -103,7 +103,7 @@ export async function fetchRecipesFromNotion(): Promise<Recipe[]> {
 		const nameProp = getProp(page, 'メニュー', 'Name', 'name', '商品名');
 		const name = getValue(nameProp);
 		if (name) {
-			menuMap.set(page.id, name);
+			menuMap.set(page.id, String(name).trim());
 		}
 	}
 
