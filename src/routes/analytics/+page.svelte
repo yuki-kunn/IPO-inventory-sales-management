@@ -23,7 +23,14 @@
 	import {
 		calculateWeekdayStats,
 		getWeekday,
-		WEEKDAY_LABELS
+		WEEKDAY_LABELS,
+		getComparisonRange,
+		summarizePeriod,
+		calculateWeatherStats as computeWeatherStats,
+		buildProductComparison,
+		type PeriodSummary,
+		type WeatherStat,
+		type ProductComparisonRow
 	} from '$lib/utils/salesAnalytics';
 
 	let isDarkMode = $state(false);
@@ -41,6 +48,17 @@
 	let lowerThreshold = $state(20000); // 下限額（円）
 	let upperThreshold = $state(80000); // 上限額（円）
 
+	// 比較モード
+	let comparisonMode = $state<'none' | 'prevMonth' | 'prevYear' | 'custom'>('none');
+	let customComparisonStart = $state('');
+	let customComparisonEnd = $state('');
+
+	// ソート状態（商品別比較テーブル）
+	let sortKey = $state<'productName' | 'currentSales' | 'comparisonSales' | 'diffSales' | 'diffPercent'>(
+		'diffSales'
+	);
+	let sortDir = $state<'asc' | 'desc'>('desc');
+
 	// localStorage への保存ガード（onMount での復元完了後のみ保存）
 	let initialized = $state(false);
 
@@ -57,6 +75,75 @@
 
 	// 曜日別平均の最大値（横棒バーの正規化用）
 	const maxWeekdayAvg = $derived(Math.max(...weekdayStats.map((w) => w.avg), 1));
+
+	// 天候フィルタ適用済みの現期間データ（比較の"今期"側に使う。既存の periodStats/productTrends とは別経路）
+	const periodDaysFiltered = $derived(
+		periodDays.filter((d) => weatherFilter === 'all' || d.weather === weatherFilter)
+	);
+
+	// 比較期間の算出
+	const comparisonRange = $derived.by((): { start: string; end: string } | null => {
+		if (comparisonMode === 'none') return null;
+		if (comparisonMode === 'custom') {
+			if (!customComparisonStart || !customComparisonEnd) return null;
+			return { start: customComparisonStart, end: customComparisonEnd };
+		}
+		if (!startDate || !endDate) return null;
+		return getComparisonRange(startDate, endDate, comparisonMode);
+	});
+
+	// 比較期間内データ（天候フィルタも同様に適用し、同一条件での比較を保証する）
+	const comparisonPeriodDays = $derived(
+		comparisonRange
+			? allSalesData
+					.filter((ds) => ds.date >= comparisonRange.start && ds.date <= comparisonRange.end)
+					.filter((ds) => weatherFilter === 'all' || ds.weather === weatherFilter)
+					.slice()
+					.sort((a, b) => a.date.localeCompare(b.date))
+			: []
+	);
+
+	const comparisonSummary = $derived<PeriodSummary | null>(
+		comparisonRange ? summarizePeriod(comparisonPeriodDays) : null
+	);
+	const currentSummaryForComparison = $derived<PeriodSummary | null>(
+		comparisonRange ? summarizePeriod(periodDaysFiltered) : null
+	);
+	const comparisonWeekdayStats = $derived(comparisonRange ? calculateWeekdayStats(comparisonPeriodDays) : []);
+	const comparisonWeatherStats = $derived<WeatherStat[]>(
+		comparisonRange ? computeWeatherStats(comparisonPeriodDays) : []
+	);
+
+	const productComparisonRaw = $derived<ProductComparisonRow[]>(
+		comparisonRange ? buildProductComparison(periodDaysFiltered, comparisonPeriodDays) : []
+	);
+
+	const productComparisonSorted = $derived.by(() => {
+		const rows = productComparisonRaw.slice();
+		const dir = sortDir === 'asc' ? 1 : -1;
+		rows.sort((a, b) => {
+			if (sortKey === 'productName') {
+				return dir * a.productName.localeCompare(b.productName);
+			}
+			if (sortKey === 'diffPercent') {
+				if (a.diffPercent === null && b.diffPercent === null) return 0;
+				if (a.diffPercent === null) return 1;
+				if (b.diffPercent === null) return -1;
+				return dir * (a.diffPercent - b.diffPercent);
+			}
+			return dir * ((a[sortKey] as number) - (b[sortKey] as number));
+		});
+		return rows;
+	});
+
+	function toggleSort(key: typeof sortKey) {
+		if (sortKey === key) {
+			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		} else {
+			sortKey = key;
+			sortDir = key === 'productName' ? 'asc' : 'desc';
+		}
+	}
 
 	// 閾値で抽出された日
 	const belowDays = $derived(periodDays.filter((d) => d.totalSales < lowerThreshold));
@@ -156,6 +243,9 @@
 			lowerThreshold = saved.lowerThreshold;
 			upperThreshold = saved.upperThreshold;
 			weatherFilter = saved.weatherFilter;
+			comparisonMode = saved.comparisonMode ?? 'none';
+			customComparisonStart = saved.customComparisonStart ?? '';
+			customComparisonEnd = saved.customComparisonEnd ?? '';
 		} else {
 			// 初回はデフォルトで過去30日間
 			const end = new Date();
@@ -176,7 +266,10 @@
 			endDate,
 			lowerThreshold,
 			upperThreshold,
-			weatherFilter
+			weatherFilter,
+			comparisonMode,
+			customComparisonStart,
+			customComparisonEnd
 		};
 		if (initialized) {
 			saveAnalyticsSettings(settings);
@@ -264,49 +357,8 @@
 
 	function calculateWeatherStats() {
 		if (!startDate || !endDate) return;
-
-		// 期間内の全データを取得（天候フィルタなし）
-		const periodData = allSalesData.filter((ds) => {
-			return ds.date >= startDate && ds.date <= endDate;
-		});
-
-		// 天候別にグループ化
-		const weatherMap = new Map<
-			WeatherType,
-			{
-				totalSales: number;
-				totalProfit: number;
-				dayCount: number;
-			}
-		>();
-
-		periodData.forEach((daily) => {
-			const weather = daily.weather || '';
-			if (!weather) return; // 天候未設定はスキップ
-
-			const existing = weatherMap.get(weather as WeatherType) || {
-				totalSales: 0,
-				totalProfit: 0,
-				dayCount: 0
-			};
-
-			weatherMap.set(weather as WeatherType, {
-				totalSales: existing.totalSales + daily.totalSales,
-				totalProfit: existing.totalProfit + daily.totalProfit,
-				dayCount: existing.dayCount + 1
-			});
-		});
-
-		// 配列に変換してソート
-		weatherStats = Array.from(weatherMap.entries())
-			.map(([weather, data]) => ({
-				weather,
-				totalSales: data.totalSales,
-				totalProfit: data.totalProfit,
-				dayCount: data.dayCount,
-				avgDailySales: data.dayCount > 0 ? data.totalSales / data.dayCount : 0
-			}))
-			.sort((a, b) => b.totalSales - a.totalSales);
+		const periodData = allSalesData.filter((ds) => ds.date >= startDate && ds.date <= endDate);
+		weatherStats = computeWeatherStats(periodData);
 	}
 
 	function calculateCategoryStats() {
@@ -511,6 +563,135 @@
 			</CardContent>
 		</Card>
 
+		<!-- 期間比較 -->
+		<Card>
+			<CardHeader>
+				<CardTitle class="flex items-center gap-2">
+					<TrendingUp class="h-5 w-5" />
+					期間比較
+				</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div class="flex flex-wrap gap-2">
+					<Button
+						variant={comparisonMode === 'none' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => (comparisonMode = 'none')}
+						class="touch-manipulation"
+					>
+						なし
+					</Button>
+					<Button
+						variant={comparisonMode === 'prevMonth' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => (comparisonMode = 'prevMonth')}
+						class="touch-manipulation"
+					>
+						前月比
+					</Button>
+					<Button
+						variant={comparisonMode === 'prevYear' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => (comparisonMode = 'prevYear')}
+						class="touch-manipulation"
+					>
+						前年比
+					</Button>
+					<Button
+						variant={comparisonMode === 'custom' ? 'default' : 'outline'}
+						size="sm"
+						onclick={() => (comparisonMode = 'custom')}
+						class="touch-manipulation"
+					>
+						カスタム
+					</Button>
+				</div>
+
+				{#if comparisonMode === 'prevMonth' || comparisonMode === 'prevYear'}
+					<p class="text-muted-foreground mt-3 text-sm">
+						{#if comparisonRange}
+							比較期間: {comparisonRange.start} 〜 {comparisonRange.end}
+						{:else}
+							主期間（分析期間の選択）を設定してください
+						{/if}
+					</p>
+				{/if}
+
+				{#if comparisonMode === 'custom'}
+					<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<label class="flex flex-col gap-1">
+							<span class="text-muted-foreground text-xs font-medium">比較期間の開始日</span>
+							<input
+								type="date"
+								bind:value={customComparisonStart}
+								class="border-border bg-background w-full rounded border px-3 py-2 text-sm"
+							/>
+						</label>
+						<label class="flex flex-col gap-1">
+							<span class="text-muted-foreground text-xs font-medium">比較期間の終了日</span>
+							<input
+								type="date"
+								bind:value={customComparisonEnd}
+								class="border-border bg-background w-full rounded border px-3 py-2 text-sm"
+							/>
+						</label>
+					</div>
+				{/if}
+
+				{#if comparisonRange && comparisonSummary && currentSummaryForComparison}
+					<div class="mt-6 overflow-x-auto">
+						<table class="w-full">
+							<thead>
+								<tr class="border-border border-b">
+									<th class="text-muted-foreground px-4 py-3 text-left text-xs font-medium uppercase">指標</th>
+									<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase">今期</th>
+									<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase">比較期間</th>
+									<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase">差額</th>
+									<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase">増減率</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each [
+									{ label: '総売上', cur: currentSummaryForComparison.totalSales, cmp: comparisonSummary.totalSales, fmt: formatCurrency },
+									{ label: '総粗利', cur: currentSummaryForComparison.totalProfit, cmp: comparisonSummary.totalProfit, fmt: formatCurrency },
+									{ label: '販売数', cur: currentSummaryForComparison.totalQuantity, cmp: comparisonSummary.totalQuantity, fmt: (v: number) => `${v}個` },
+									{ label: '1日平均売上', cur: currentSummaryForComparison.avgDailySales, cmp: comparisonSummary.avgDailySales, fmt: formatCurrency }
+								] as row}
+									{@const diff = row.cur - row.cmp}
+									{@const pct = row.cmp === 0 ? null : (diff / row.cmp) * 100}
+									<tr class="border-border hover:bg-muted/50 border-b transition-colors">
+										<td class="px-4 py-3 font-medium">{row.label}</td>
+										<td class="px-4 py-3 text-right">{row.fmt(row.cur)}</td>
+										<td class="px-4 py-3 text-right">{row.fmt(row.cmp)}</td>
+										<td
+											class="px-4 py-3 text-right font-medium {diff > 0
+												? 'text-green-600 dark:text-green-400'
+												: diff < 0
+													? 'text-red-600 dark:text-red-400'
+													: ''}"
+										>
+											{diff > 0 ? '+' : ''}{row.fmt(diff)}
+										</td>
+										<td
+											class="px-4 py-3 text-right {pct === null
+												? 'text-muted-foreground'
+												: pct > 0
+													? 'text-green-600 dark:text-green-400'
+													: pct < 0
+														? 'text-red-600 dark:text-red-400'
+														: ''}"
+										>
+											{pct === null ? '—' : `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</CardContent>
+		</Card>
+
 		<!-- 期間統計 -->
 		<div class="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-5">
 			<StatsCard
@@ -584,6 +765,16 @@
 										class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
 										>1日平均売上</th
 									>
+									{#if comparisonRange}
+										<th
+											class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+											>比較期間総売上</th
+										>
+										<th
+											class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+											>増減率</th
+										>
+									{/if}
 									<th
 										class="text-muted-foreground px-4 py-3 text-center text-xs font-medium uppercase"
 										>フィルタ</th
@@ -611,6 +802,28 @@
 										<td class="px-4 py-3 text-right text-sm"
 											>{formatCurrency(stat.avgDailySales)}</td
 										>
+										{#if comparisonRange}
+											{@const cmpStat = comparisonWeatherStats.find((c) => c.weather === stat.weather)}
+											<td class="px-4 py-3 text-right text-sm">
+												{cmpStat ? formatCurrency(cmpStat.totalSales) : '—'}
+											</td>
+											<td class="px-4 py-3 text-right text-sm">
+												{#if cmpStat && cmpStat.totalSales > 0}
+													{@const pct = ((stat.totalSales - cmpStat.totalSales) / cmpStat.totalSales) * 100}
+													<span
+														class={pct > 0
+															? 'text-green-600 dark:text-green-400'
+															: pct < 0
+																? 'text-red-600 dark:text-red-400'
+																: ''}
+													>
+														{pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+													</span>
+												{:else}
+													—
+												{/if}
+											</td>
+										{/if}
 										<td class="px-4 py-3 text-center">
 											<Button
 												variant="outline"
@@ -664,6 +877,14 @@
 								<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
 									>日数</th
 								>
+								{#if comparisonRange}
+									<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>比較期間平均</th
+									>
+									<th class="text-muted-foreground px-4 py-3 text-right text-xs font-medium uppercase"
+										>増減率</th
+									>
+								{/if}
 							</tr>
 						</thead>
 						<tbody>
@@ -707,6 +928,28 @@
 										{w.count > 0 ? formatCurrency(w.min) : '—'}
 									</td>
 									<td class="px-4 py-3 text-right text-sm">{w.count}日</td>
+									{#if comparisonRange}
+										{@const cmp = comparisonWeekdayStats[w.weekday]}
+										<td class="px-4 py-3 text-right text-sm">
+											{cmp && cmp.count > 0 ? formatCurrency(cmp.avg) : '—'}
+										</td>
+										<td class="px-4 py-3 text-right text-sm">
+											{#if cmp && cmp.count > 0 && w.count > 0}
+												{@const pct = ((w.avg - cmp.avg) / cmp.avg) * 100}
+												<span
+													class={pct > 0
+														? 'text-green-600 dark:text-green-400'
+														: pct < 0
+															? 'text-red-600 dark:text-red-400'
+															: ''}
+												>
+													{pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+												</span>
+											{:else}
+												—
+											{/if}
+										</td>
+									{/if}
 								</tr>
 							{/each}
 						</tbody>
@@ -1118,6 +1361,131 @@
 				{/if}
 			</CardContent>
 		</Card>
+
+		<!-- 商品別比較 -->
+		{#if comparisonRange}
+			<Card>
+				<CardHeader>
+					<CardTitle class="flex items-center gap-2">
+						<TrendingUp class="h-5 w-5" />
+						商品別比較
+					</CardTitle>
+				</CardHeader>
+				<CardContent>
+					{#if productComparisonSorted.length === 0}
+						<div class="text-muted-foreground py-12 text-center">比較対象の商品データがありません</div>
+					{:else}
+						<!-- モバイル表示: カードレイアウト -->
+						<div class="space-y-3 md:hidden">
+							{#each productComparisonSorted as row}
+								<div class="border-border bg-card hover:bg-muted/50 rounded-lg border p-4 transition-colors">
+									<div class="mb-3 font-semibold">{row.productName}</div>
+									<div class="grid grid-cols-2 gap-2 text-sm">
+										<div>
+											<div class="text-muted-foreground text-xs">今期売上</div>
+											<div class="font-semibold">{formatCurrency(row.currentSales)}</div>
+										</div>
+										<div>
+											<div class="text-muted-foreground text-xs">比較期間売上</div>
+											<div class="font-medium">{formatCurrency(row.comparisonSales)}</div>
+										</div>
+										<div>
+											<div class="text-muted-foreground text-xs">差額</div>
+											<div
+												class="font-medium {row.diffSales > 0
+													? 'text-green-600 dark:text-green-400'
+													: row.diffSales < 0
+														? 'text-red-600 dark:text-red-400'
+														: ''}"
+											>
+												{row.diffSales > 0 ? '+' : ''}{formatCurrency(row.diffSales)}
+											</div>
+										</div>
+										<div>
+											<div class="text-muted-foreground text-xs">増減率</div>
+											<div
+												class="font-medium {row.diffPercent === null
+													? 'text-muted-foreground'
+													: row.diffPercent > 0
+														? 'text-green-600 dark:text-green-400'
+														: row.diffPercent < 0
+															? 'text-red-600 dark:text-red-400'
+															: ''}"
+											>
+												{row.diffPercent === null
+													? '新規'
+													: `${row.diffPercent > 0 ? '+' : ''}${row.diffPercent.toFixed(1)}%`}
+											</div>
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+
+						<!-- タブレット以上: テーブル表示 -->
+						<div class="hidden overflow-x-auto md:block">
+							<table class="w-full">
+								<thead>
+									<tr class="border-border border-b">
+										{#each [
+											{ key: 'productName', label: '商品名', align: 'text-left' },
+											{ key: 'currentSales', label: '今期売上', align: 'text-right' },
+											{ key: 'comparisonSales', label: '比較期間売上', align: 'text-right' },
+											{ key: 'diffSales', label: '差額', align: 'text-right' },
+											{ key: 'diffPercent', label: '増減率', align: 'text-right' }
+										] as col}
+											<th class="px-4 py-3 {col.align}">
+												<button
+													type="button"
+													onclick={() => toggleSort(col.key as typeof sortKey)}
+													class="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs font-medium uppercase touch-manipulation"
+												>
+													{col.label}
+													{#if sortKey === col.key}
+														<span class="text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
+													{/if}
+												</button>
+											</th>
+										{/each}
+									</tr>
+								</thead>
+								<tbody>
+									{#each productComparisonSorted as row}
+										<tr class="border-border hover:bg-muted/50 border-b transition-colors">
+											<td class="px-4 py-3 font-medium">{row.productName}</td>
+											<td class="px-4 py-3 text-right">{formatCurrency(row.currentSales)}</td>
+											<td class="px-4 py-3 text-right">{formatCurrency(row.comparisonSales)}</td>
+											<td
+												class="px-4 py-3 text-right font-medium {row.diffSales > 0
+													? 'text-green-600 dark:text-green-400'
+													: row.diffSales < 0
+														? 'text-red-600 dark:text-red-400'
+														: ''}"
+											>
+												{row.diffSales > 0 ? '+' : ''}{formatCurrency(row.diffSales)}
+											</td>
+											<td
+												class="px-4 py-3 text-right {row.diffPercent === null
+													? 'text-muted-foreground'
+													: row.diffPercent > 0
+														? 'text-green-600 dark:text-green-400'
+														: row.diffPercent < 0
+															? 'text-red-600 dark:text-red-400'
+															: ''}"
+											>
+												{row.diffPercent === null
+													? '新規'
+													: `${row.diffPercent > 0 ? '+' : ''}${row.diffPercent.toFixed(1)}%`}
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{/if}
+				</CardContent>
+			</Card>
+		{/if}
 
 		<!-- 商品別トレンド -->
 		{#if selectedProduct && productDailyData.length > 0}
