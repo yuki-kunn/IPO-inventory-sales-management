@@ -19,6 +19,17 @@ const DEFAULT_CONFIG = {
 	runDate: ''
 };
 
+// クライアントに公開してよいフィールドのみ抽出する。
+// airregiCookies / airregiCookiesUpdatedAt はAirREGIログインCookieの実値を含むため、
+// このエンドポイント（無認証で叩ける）からは絶対に返さない。
+// Cookieの状態確認は /api/automation/cookies（メタ情報のみ返す）を使う。
+// Python側(run.py/firestore_client.py)はFirestore Admin SDKを直接読むため、
+// このAPIレスポンスから除外してもワーカーの動作には影響しない。
+function toPublicConfig(data: Record<string, unknown>) {
+	const { airregiCookies, airregiCookiesUpdatedAt, ...publicFields } = data;
+	return publicFields;
+}
+
 // 設定取得
 export const GET: RequestHandler = async () => {
 	if (!adminDb) {
@@ -41,7 +52,7 @@ export const GET: RequestHandler = async () => {
 			return json({ config: DEFAULT_CONFIG });
 		}
 
-		return json({ config: { ...DEFAULT_CONFIG, ...doc.data() } });
+		return json({ config: toPublicConfig({ ...DEFAULT_CONFIG, ...doc.data() }) });
 	} catch (error: any) {
 		return createErrorResponse(error, '設定の取得に失敗しました', 500);
 	}
