@@ -180,6 +180,44 @@ function createDailySalesApiStore() {
 				throw error;
 			}
 		},
+		// 割引/割増合計(税込)を更新する（会計明細CSVから日次集計した値）。
+		// updateWeather と同様、既存データを取得してから discountTotal のみ上書き保存する。
+		updateDiscountTotal: async (date: string, discountTotal: number) => {
+			if (!browser) return;
+
+			try {
+				const response = await fetch(`/api/firestore/dailySales?date=${date}`);
+				if (!response.ok) {
+					throw new Error('Failed to fetch daily sales');
+				}
+
+				const data = await response.json();
+				const dailySale = data.dailySale;
+
+				if (!dailySale) {
+					throw new Error('Daily sales not found');
+				}
+
+				await fetch('/api/firestore/dailySales', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						action: 'addOrUpdate',
+						date,
+						salesData: dailySale.salesData || dailySale.sales || [],
+						unregisteredCount: dailySale.unregisteredCount || 0,
+						customerInfo: dailySale.customerInfo,
+						weather: dailySale.weather,
+						discountTotal
+					})
+				});
+
+				await fetchDailySales();
+			} catch (error) {
+				console.error('[DailySales API] 割引合計更新失敗:', error);
+				throw error;
+			}
+		},
 		remove: async (date: string) => {
 			if (!browser) return;
 

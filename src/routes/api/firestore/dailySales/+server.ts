@@ -72,7 +72,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			unregisteredCount,
 			customerInfo,
 			processedProducts,
-			weather
+			weather,
+			discountTotal
 		} = body;
 
 		if (!action) {
@@ -129,6 +130,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					unregisteredCount: 0,
 					customerInfo: customerInfo ?? existingData.customerInfo ?? [],
 					weather: weather ?? existingData.weather ?? '',
+					discountTotal: discountTotal ?? existingData.discountTotal ?? 0,
 					reflectionDelta: null,
 					pendingRevertDelta: existingData.reflectionDelta ?? null,
 					createdAt: existingData.createdAt ?? new Date().toISOString(),
@@ -155,6 +157,7 @@ export const POST: RequestHandler = async ({ request }) => {
 					processedAt: null,
 					processedProducts: [],
 					weather: weather ?? '',
+					discountTotal: discountTotal ?? 0,
 					reflectionDelta: null,
 					pendingRevertDelta: null,
 					createdAt: new Date().toISOString(),

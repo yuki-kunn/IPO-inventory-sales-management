@@ -27,7 +27,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import type { DailySales, WeatherType } from '$lib/types';
-	import { DollarSign, TrendingUp, Package } from 'lucide-svelte';
+	import { DollarSign, TrendingUp, Package, Tag } from 'lucide-svelte';
 
 	let isDarkMode = $state(false);
 	let salesDate = $state('');
@@ -387,6 +387,15 @@
 					icon={Package}
 					iconColor="text-orange-600 dark:text-orange-400"
 				/>
+				{#if dailyData.discountTotal}
+					<StatsCard
+						title="割引/割増合計"
+						value={`¥${dailyData.discountTotal.toLocaleString()}`}
+						description={`${salesDate}の割引・割増（税込）`}
+						icon={Tag}
+						iconColor="text-pink-600 dark:text-pink-400"
+					/>
+				{/if}
 			</div>
 
 			<!-- 処理済み商品情報 -->

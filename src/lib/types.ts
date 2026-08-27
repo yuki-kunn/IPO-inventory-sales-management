@@ -110,6 +110,7 @@ export interface DailySales {
 	unregisteredCount: number; // 未登録商品数
 	processedProducts: string[]; // 在庫減算済みの商品名リスト
 	weather?: WeatherType; // 天候情報
+	discountTotal?: number; // 割引/割増合計(税込)。会計明細CSVから日次集計した値
 	reflectionDelta?: ReflectionDelta | null; // 今回までに反映した在庫減算・未登録の累積差分
 	pendingRevertDelta?: ReflectionDelta | null; // 次回reflect時に取り消すべき旧反映差分
 	createdAt: string;
