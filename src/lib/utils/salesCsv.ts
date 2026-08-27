@@ -224,28 +224,21 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 			};
 		}
 
-		// ヘッダー行をパース
+		// ヘッダー行をパース（列名→インデックスのマップを作成）
 		const headers = lines[0].split(',').map((h) => h.trim());
+		// 同名列（構成比%が複数）はインデックス配列で管理
+		const headerMap = new Map<string, number[]>();
+		headers.forEach((h, i) => {
+			if (!headerMap.has(h)) headerMap.set(h, []);
+			headerMap.get(h)!.push(i);
+		});
+		// 列インデックスを解決するヘルパー（同名列はoccurrence番目を取得）
+		const col = (name: string, occurrence = 0): number =>
+			(headerMap.get(name) ?? [])[occurrence] ?? -1;
 
-		// 新しい期待されるヘッダー（種別1、種別2を含む）
-		const expectedHeaders = [
-			'商品名',
-			'種別1',
-			'種別2',
-			'カテゴリー',
-			'税区分',
-			'販売総売上',
-			'構成比%',
-			'粗利総額',
-			'構成比%',
-			'販売商品数',
-			'構成比%',
-			'返品商品数',
-			'構成比%',
-			'商品ID',
-			'商品コード',
-			'バーコード'
-		];
+		// 割引額列の有無を検出（salesList形式に含まれる）
+		const discountIdx = col('割引額');
+		const hasDiscount = discountIdx >= 0;
 
 		// === 高速化: 一度だけタイムスタンプ取得 ===
 		const importedAt = new Date().toISOString();
@@ -259,10 +252,11 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 			const values = line.split(',').map((v) => v.trim());
 
 			try {
-				const rawProductName = values[0] || '';
-				const variation1Raw = values[1] || '';
-				const variation2Raw = values[2] || '';
-				const category = values[3] || '';
+				// 列名ベースで値を取得（固定インデックスではなくヘッダーから解決）
+				const rawProductName = values[col('商品名')] ?? values[0] ?? '';
+				const variation1Raw = values[col('種別1')] ?? values[1] ?? '';
+				const variation2Raw = values[col('種別2')] ?? values[2] ?? '';
+				const category = values[col('カテゴリー')] ?? values[3] ?? '';
 
 				// === 高速化: 早期リターンでチェック順序を最適化 ===
 
@@ -278,10 +272,11 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 
 				// カテゴリが「顧客情報」の場合は顧客情報として処理（早期分岐）
 				if (category === '顧客情報') {
+					const soldIdx = col('販売商品数');
 					customerInfo.push({
 						gender: rawProductName,
 						ageGroup: variation1Raw,
-						count: parseInt(values[9]) || 0
+						count: parseInt(soldIdx >= 0 ? values[soldIdx] : values[9]) || 0
 					});
 					continue;
 				}
@@ -313,28 +308,47 @@ export async function parseSalesCSV(file: File): Promise<ParsedSalesCSVResult> {
 				const variation1 = cleanVariation(variation1Raw);
 				const variation2 = cleanVariation(variation2Raw);
 
+				// 各列の値をヘッダーマップ経由で取得
+				const taxTypeIdx = col('税区分');
+				const totalSalesIdx = col('販売総売上');
+				const salesRatioIdx = col('構成比%', 0); // 1つ目の構成比%
+				const grossProfitIdx = col('粗利総額');
+				const profitRatioIdx = col('構成比%', 1); // 2つ目の構成比%
+				const soldQtyIdx = col('販売商品数');
+				const qtyRatioIdx = col('構成比%', 2); // 3つ目の構成比%
+				const returnQtyIdx = col('返品商品数');
+				const returnRatioIdx = col('構成比%', 3); // 4つ目の構成比%
+				const productIdIdx = col('商品ID');
+				const productCodeIdx = col('商品コード');
+				const barcodeIdx = col('バーコード');
+
 				// === 高速化: generateFastId()使用（UUIDより約10倍高速） ===
-				salesData.push({
+				const entry: import('$lib/types').SalesData = {
 					id: generateFastId(),
 					productName: normalizedProductName,
 					variation1: variation1 || undefined,
 					variation2: variation2 || undefined,
 					category: category,
-					taxType: values[4] || '',
-					totalSales: parseFloat(values[5]) || 0,
-					salesRatio: parseFloat(values[6]) || 0,
-					grossProfit: parseFloat(values[7]) || 0,
-					profitRatio: parseFloat(values[8]) || 0,
-					soldQuantity: parseInt(values[9]) || 0,
-					quantityRatio: parseFloat(values[10]) || 0,
-					returnedQuantity: parseInt(values[11]) || 0,
-					returnRatio: parseFloat(values[12]) || 0,
-					productId: values[13] || '',
-					productCode: values[14] || '',
-					barcode: values[15] || '',
+					taxType: taxTypeIdx >= 0 ? (values[taxTypeIdx] || '') : (values[4] || ''),
+					totalSales: parseFloat(totalSalesIdx >= 0 ? values[totalSalesIdx] : values[5]) || 0,
+					salesRatio: parseFloat(salesRatioIdx >= 0 ? values[salesRatioIdx] : values[6]) || 0,
+					grossProfit: parseFloat(grossProfitIdx >= 0 ? values[grossProfitIdx] : values[7]) || 0,
+					profitRatio: parseFloat(profitRatioIdx >= 0 ? values[profitRatioIdx] : values[8]) || 0,
+					soldQuantity: parseInt(soldQtyIdx >= 0 ? values[soldQtyIdx] : values[9]) || 0,
+					quantityRatio: parseFloat(qtyRatioIdx >= 0 ? values[qtyRatioIdx] : values[10]) || 0,
+					returnedQuantity: parseInt(returnQtyIdx >= 0 ? values[returnQtyIdx] : values[11]) || 0,
+					returnRatio: parseFloat(returnRatioIdx >= 0 ? values[returnRatioIdx] : values[12]) || 0,
+					productId: productIdIdx >= 0 ? (values[productIdIdx] || '') : (values[13] || ''),
+					productCode: productCodeIdx >= 0 ? (values[productCodeIdx] || '') : (values[14] || ''),
+					barcode: barcodeIdx >= 0 ? (values[barcodeIdx] || '') : (values[15] || ''),
 					salesDate: salesDate,
-					importedAt: importedAt // 事前に取得した値を使用
-				});
+					importedAt: importedAt
+				};
+				// 割引額列が存在する場合のみ付与
+				if (hasDiscount) {
+					entry.discountAmount = parseFloat(values[discountIdx]) || 0;
+				}
+				salesData.push(entry);
 			} catch (error) {
 				errors.push({
 					row: i + 1,

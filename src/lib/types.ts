@@ -75,6 +75,7 @@ export interface SalesData {
 	productId: string;
 	productCode: string;
 	barcode: string;
+	discountAmount?: number; // 割引額（salesList形式のCSVに含まれる場合）
 	salesDate: string; // 売上日（YYYY-MM-DD形式）
 	importedAt: string;
 }
