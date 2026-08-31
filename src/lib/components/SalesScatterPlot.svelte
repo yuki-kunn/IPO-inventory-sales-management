@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { DailySales, WeatherType } from '$lib/types';
-	import { getWeekday, WEEKDAY_LABELS } from '$lib/utils/salesAnalytics';
+	import { getWeekday, WEEKDAY_LABELS, netSales } from '$lib/utils/salesAnalytics';
 	import { formatCurrency } from '$lib/utils/formatters';
 
 	let {
@@ -54,9 +54,9 @@
 	const safeLower = $derived(Number.isFinite(lowerThreshold) ? lowerThreshold : 0);
 	const safeUpper = $derived(Number.isFinite(upperThreshold) ? upperThreshold : 0);
 
-	// Y軸の最大値
+	// Y軸の最大値（割引反映後の実質売上ベース）
 	const yMax = $derived(
-		Math.max(...days.map((d) => d.totalSales), safeUpper, 1) * 1.1
+		Math.max(...days.map((d) => netSales(d)), safeUpper, 1) * 1.1
 	);
 
 	// Xスケール: 点 i の x座標
@@ -210,9 +210,10 @@
 		<!-- 曜日色分けの点 -->
 		{#each days as day, i}
 			{@const cx = xScale(i)}
-			{@const cy = yToSvg(day.totalSales)}
+			{@const daySales = netSales(day)}
+			{@const cy = yToSvg(daySales)}
 			{@const wd = getWeekday(day.date)}
-			{@const outlier = isOutlier(day.totalSales)}
+			{@const outlier = isOutlier(daySales)}
 			{@const emoji = weatherEmoji(day.weather)}
 			{#if emoji}
 				<text x={cx} y={cy - 12} text-anchor="middle" font-size="10">{emoji}</text>
@@ -226,7 +227,7 @@
 				stroke-width={outlier ? 2.5 : 1}
 			>
 				<title
-					>{day.date}（{WEEKDAY_LABELS[wd]}） {formatCurrency(day.totalSales)}{emoji
+					>{day.date}（{WEEKDAY_LABELS[wd]}） {formatCurrency(daySales)}{emoji
 						? ` ${emoji}`
 						: ''}</title
 				>

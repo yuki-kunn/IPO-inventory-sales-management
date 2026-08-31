@@ -28,6 +28,7 @@
 	import { browser } from '$app/environment';
 	import type { DailySales, WeatherType } from '$lib/types';
 	import { DollarSign, TrendingUp, Package, Tag } from 'lucide-svelte';
+	import { netSales } from '$lib/utils/salesAnalytics';
 
 	let isDarkMode = $state(false);
 	let salesDate = $state('');
@@ -361,8 +362,10 @@
 			<div class="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-4">
 				<StatsCard
 					title="総売上額"
-					value={`¥${dailyData.totalSales.toLocaleString()}`}
-					description={`${salesDate}の総売上`}
+					value={`¥${netSales(dailyData).toLocaleString()}`}
+					description={dailyData.discountTotal
+						? `${salesDate}の総売上（割引・割増反映後）`
+						: `${salesDate}の総売上`}
 					icon={DollarSign}
 					iconColor="text-green-600 dark:text-green-400"
 				/>

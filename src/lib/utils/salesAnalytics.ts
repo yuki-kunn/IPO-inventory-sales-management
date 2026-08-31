@@ -1,5 +1,15 @@
 import type { DailySales, WeatherType } from '$lib/types';
 
+/**
+ * 割引/割増を反映した後の実質売上額。
+ * discountTotal は会計明細CSVから集計した「割引/割増合計(税込)」で、
+ * 割引はマイナス値・割増はプラス値として保存されているため単純加算でよい。
+ * discountTotal が無い日（割引データ未取得の期間）は totalSales をそのまま返す。
+ */
+export function netSales(day: DailySales): number {
+	return day.totalSales + (day.discountTotal ?? 0);
+}
+
 /** Date -> YYYY-MM-DD (local, zero-padded) */
 function formatLocalDate(date: Date): string {
 	const y = date.getFullYear();
@@ -43,11 +53,11 @@ export interface WeekdayStat {
 
 /** 期間内データを曜日別に集計（日→土の7要素を必ず返す） */
 export function calculateWeekdayStats(days: DailySales[]): WeekdayStat[] {
-	// 0〜6の7バケツに totalSales を集約
+	// 0〜6の7バケツに割引後の実質売上を集約
 	const buckets: number[][] = [[], [], [], [], [], [], []];
 	for (const day of days) {
 		const wd = getWeekday(day.date);
-		buckets[wd].push(day.totalSales);
+		buckets[wd].push(netSales(day));
 	}
 
 	return buckets.map((values, weekday) => {
@@ -120,7 +130,7 @@ export interface PeriodSummary {
 }
 
 export function summarizePeriod(days: DailySales[]): PeriodSummary {
-	const totalSales = days.reduce((s, d) => s + d.totalSales, 0);
+	const totalSales = days.reduce((s, d) => s + netSales(d), 0);
 	const totalProfit = days.reduce((s, d) => s + d.totalProfit, 0);
 	const totalQuantity = days.reduce((s, d) => s + d.totalQuantity, 0);
 	const productSet = new Set<string>();
@@ -150,7 +160,7 @@ export function calculateWeatherStats(days: DailySales[]): WeatherStat[] {
 		if (!weather) return;
 		const existing = weatherMap.get(weather as WeatherType) || { totalSales: 0, totalProfit: 0, dayCount: 0 };
 		weatherMap.set(weather as WeatherType, {
-			totalSales: existing.totalSales + daily.totalSales,
+			totalSales: existing.totalSales + netSales(daily),
 			totalProfit: existing.totalProfit + daily.totalProfit,
 			dayCount: existing.dayCount + 1
 		});

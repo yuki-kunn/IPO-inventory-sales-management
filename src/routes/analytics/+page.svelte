@@ -28,6 +28,7 @@
 		summarizePeriod,
 		calculateWeatherStats as computeWeatherStats,
 		buildProductComparison,
+		netSales,
 		type PeriodSummary,
 		type WeatherStat,
 		type ProductComparisonRow
@@ -145,9 +146,9 @@
 		}
 	}
 
-	// 閾値で抽出された日
-	const belowDays = $derived(periodDays.filter((d) => d.totalSales < lowerThreshold));
-	const aboveDays = $derived(periodDays.filter((d) => d.totalSales > upperThreshold));
+	// 閾値で抽出された日（割引反映後の実質売上で判定）
+	const belowDays = $derived(periodDays.filter((d) => netSales(d) < lowerThreshold));
+	const aboveDays = $derived(periodDays.filter((d) => netSales(d) > upperThreshold));
 
 	// 集計結果
 	let periodStats = $state({
@@ -307,7 +308,7 @@
 		>();
 
 		filteredData.forEach((daily) => {
-			totalSales += daily.totalSales;
+			totalSales += netSales(daily);
 			totalProfit += daily.totalProfit;
 			totalQuantity += daily.totalQuantity;
 
@@ -1030,7 +1031,7 @@
 											{/if}
 										</div>
 										<span class="text-sm font-semibold whitespace-nowrap"
-											>{formatCurrency(d.totalSales)}</span
+											>{formatCurrency(netSales(d))}</span
 										>
 									</button>
 								{/each}
@@ -1065,7 +1066,7 @@
 											{/if}
 										</div>
 										<span class="text-sm font-semibold whitespace-nowrap"
-											>{formatCurrency(d.totalSales)}</span
+											>{formatCurrency(netSales(d))}</span
 										>
 									</button>
 								{/each}

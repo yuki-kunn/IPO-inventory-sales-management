@@ -10,6 +10,7 @@
 	import { dailySales } from '$lib/stores/dailySales.api';
 	import { darkMode } from '$lib/stores/darkMode';
 	import type { DailySales } from '$lib/types';
+	import { netSales } from '$lib/utils/salesAnalytics';
 
 	let dailySalesData = $state<DailySales[]>([]);
 	let isDarkMode = $state(false);
@@ -197,7 +198,7 @@
 										<div
 											class="text-muted-foreground w-full truncate px-0.5 text-center text-[8px] sm:text-[10px]"
 										>
-											¥{day.salesData.totalSales.toLocaleString()}
+											¥{netSales(day.salesData).toLocaleString()}
 										</div>
 										{#if day.salesData.unregisteredCount > 0}
 											<div class="text-[9px] font-medium text-red-600 sm:text-xs dark:text-red-400">
