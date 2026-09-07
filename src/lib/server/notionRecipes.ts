@@ -72,6 +72,19 @@ export async function fetchRecipesFromNotion(): Promise<Recipe[]> {
 		return null;
 	};
 
+	// タイトル(name)取得専用ヘルパー。
+	// Notionの各ページには必ず1つだけ type==='title' のプロパティが存在するため、
+	// キーワード部分一致（getProp）に頼らずそれを直接特定する。
+	// 例: 「メニュー写真」のようなFilesプロパティがキーワード「メニュー」に部分一致して
+	// 本来の「メニュー名」(title)より先にヒットしてしまう事故を防ぐ。
+	const getTitleValue = (page: any): string | null => {
+		const titleProp = Object.values(page.properties as Record<string, any>).find(
+			(p: any) => p?.type === 'title'
+		) as any;
+		const value = titleProp?.title?.[0]?.plain_text;
+		return value ? String(value).trim() : null;
+	};
+
 	// プロパティから値を安全に取得（型を自動判定）
 	const getValue = (prop: any): any => {
 		if (!prop) return null;
@@ -100,18 +113,16 @@ export async function fetchRecipesFromNotion(): Promise<Recipe[]> {
 	// メニューマスタからIDマッピングを作成
 	const menuMap = new Map<string, string>(); // ID -> メニュー名
 	for (const page of menuResponse.results) {
-		const nameProp = getProp(page, 'メニュー', 'Name', 'name', '商品名');
-		const name = getValue(nameProp);
+		const name = getTitleValue(page);
 		if (name) {
-			menuMap.set(page.id, String(name).trim());
+			menuMap.set(page.id, name);
 		}
 	}
 
 	// 原材料マスタからIDマッピングを作成（ID -> 原材料情報）
 	const ingredientsMapById = new Map<string, Ingredient>();
 	for (const page of ingredientsResponse.results) {
-		const nameProp = getProp(page, '原材料名', 'Name', 'name');
-		const name = getValue(nameProp);
+		const name = getTitleValue(page);
 
 		if (name) {
 			const ingredient: Ingredient = {

@@ -53,6 +53,17 @@ export async function fetchIngredientsFromNotion(): Promise<Ingredient[]> {
 		return null;
 	};
 
+	// タイトル(name)取得専用ヘルパー。Notionの各ページには必ず1つだけ
+	// type==='title' のプロパティが存在するため、キーワード部分一致に頼らず直接特定する。
+	// （例: 「原材料写真」のようなプロパティが「原材料」の部分一致でヒットする事故を防ぐ）
+	const getTitleValue = (page: any): string | null => {
+		const titleProp = Object.values(page.properties as Record<string, any>).find(
+			(p: any) => p?.type === 'title'
+		) as any;
+		const value = titleProp?.title?.[0]?.plain_text;
+		return value ? String(value).trim() : null;
+	};
+
 	// プロパティから値を安全に取得（型を自動判定）
 	const getValue = (prop: any): any => {
 		if (!prop) return null;
@@ -77,8 +88,7 @@ export async function fetchIngredientsFromNotion(): Promise<Ingredient[]> {
 	// データを整形
 	const ingredients: Ingredient[] = response.results.map((page: any) => {
 		// タイトルプロパティ（原材料名 or 商品名）
-		const nameProp = getProp(page, '原材料名', '商品名', 'Name', 'name');
-		const name = getValue(nameProp) || '名前なし';
+		const name = getTitleValue(page) || '名前なし';
 
 		// 在庫数（必須）
 		const stockProp = getProp(page, '在庫数', '在庫', '現在庫', 'Stock', 'stock');
